@@ -1,4 +1,5 @@
 export interface BankIntervention {
+  id: string;
   challenge: string;
   description: string;
   bankStatement: string;
@@ -10,76 +11,102 @@ export interface BankIntervention {
 // Penalty interventions for bad credit scores
 const penaltyInterventions: BankIntervention[] = [
   {
-    challenge: "One Full Shot. No Excuses. 🥃",
-    description: "Your portfolio requires immediate liquid intervention. Take a shot, courtesy of Booze Bank LTD.",
-    bankStatement: "The market has reviewed your past performance... and lost all confidence. Booze Bank LTD is, quite frankly, shocked.",
-    severity: "Your reckless financial decisions have led to this moment. The severity of this intervention directly correlates with your consistently poor judgment.",
+    id: 'one-shot-no-excuses',
+    challenge: "One Shot. No Excuses. 🥃",
+    description: "Take a shot for Booze Bank LTD.",
+    bankStatement: "Your performance worries Booze Bank LTD.",
+    severity: "This is a direct result of risky choices.",
     difficulty: 'hard',
     type: 'penalty'
   },
   {
-    challenge: "Finish One Beer. Slowly. 🍺",
-    description: "Time to face the consequences of your financial decisions. Finish a beer for Booze Bank LTD.",
-    bankStatement: "Your credit score has reached levels that make even junior analysts at Booze Bank LTD uncomfortable. The board has serious concerns.",
-    severity: "Consider this a formal warning. Your portfolio's performance suggests a concerning pattern of high-risk behavior.",
+    id: 'finish-a-beer',
+    challenge: "Finish a Beer. 🍺",
+    description: "Finish a beer for Booze Bank LTD.",
+    bankStatement: "Your credit score is making us nervous.",
+    severity: "This is a warning for risky behavior.",
     difficulty: 'hard',
     type: 'penalty'
   },
   {
-    challenge: "Two Shots. Back to Back. 🥃🥃",
-    description: "Double trouble for double mistakes. Take two shots immediately for Booze Bank LTD.",
-    bankStatement: "Your actions have become a cautionary tale. The market is watching. Booze Bank LTD is disappointed.",
-    severity: "This is a moment of public shame. Let everyone learn from your mistakes.",
+    id: 'two-shots-now',
+    challenge: "Two Shots. Now. 🥃🥃",
+    description: "Take two shots for Booze Bank LTD.",
+    bankStatement: "You're now a cautionary tale.",
+    severity: "Let others learn from your mistakes.",
     difficulty: 'hard',
     type: 'penalty'
   },
   {
-    challenge: "Chug Half a Beer. No Breaks. 🍺",
-    description: "A swift penalty for a swift decline. Chug half a beer now for Booze Bank LTD.",
-    bankStatement: "Your repeated errors have forced Booze Bank LTD to take drastic measures.",
-    severity: "This is a remedial intervention. The board is losing patience.",
+    id: 'chug-half-beer',
+    challenge: "Chug Half a Beer. 🍺",
+    description: "Chug half a beer for Booze Bank LTD.",
+    bankStatement: "We're forced to act.",
+    severity: "The board is losing patience.",
     difficulty: 'hard',
     type: 'penalty'
   },
   {
-    challenge: "Mix a 'Banker's Special' (everyone picks an ingredient) and drink it. 🍹",
-    description: "A custom drink for a custom disaster. Enjoy your creation, courtesy of Booze Bank LTD.",
-    bankStatement: "Your performance has set a new low. Booze Bank LTD insists on a unique penalty.",
-    severity: "Let this drink be a warning to others.",
+    id: 'bankers-special-group-drink',
+    challenge: "Banker's Special: Group Drink 🍹",
+    description: "Drink a mix chosen by everyone.",
+    bankStatement: "You've set a new low.",
+    severity: "Let this be a warning.",
     difficulty: 'hard',
     type: 'penalty'
   },
   {
-    challenge: "Take a Shot Decided by the Group 🥃🤔",
-    description: "You have lost the right to choose. The group will determine your shot for Booze Bank LTD.",
-    bankStatement: "Your financial recklessness has left Booze Bank LTD speechless.",
-    severity: "This is the ultimate intervention. May your peers show mercy.",
+    id: 'groups-choice-shot',
+    challenge: "Group's Choice Shot 🥃🤔",
+    description: "Group picks your shot.",
+    bankStatement: "We're speechless.",
+    severity: "May your peers be kind.",
     difficulty: 'hard',
     type: 'penalty'
   },
   {
-    challenge: "Half a Beer. No Complaints. 🍺",
-    description: "A measured response to your measurable decline. Drink half a beer for Booze Bank LTD.",
-    bankStatement: "The risk assessment department at Booze Bank LTD has flagged your account for immediate intervention. Your credit score is... suboptimal.",
-    severity: "This intervention reflects the board's growing concern with your investment strategy.",
+    id: 'half-a-beer',
+    challenge: "Half a Beer. 🍺",
+    description: "Drink half a beer.",
+    bankStatement: "Immediate intervention required.",
+    severity: "We're concerned about your strategy.",
     difficulty: 'medium',
     type: 'penalty'
   },
-  // New unique penalty interventions
   {
-    challenge: "Two Push-Ups. Right Now. 💪",
-    description: "Physical activity may help you rethink your financial strategy.",
-    bankStatement: "Your portfolio's performance has been sluggish. The board recommends immediate action.",
-    severity: "This is a wake-up call. The board expects better results.",
+    id: 'two-pushups',
+    challenge: "Two Push-Ups 💪",
+    description: "Do two push-ups.",
+    bankStatement: "Your portfolio is sluggish.",
+    severity: "Time to step up.",
     difficulty: 'medium',
     type: 'penalty'
   },
   {
-    challenge: "Sing a Song of Regret 🎤",
-    description: "A public display of remorse is required.",
-    bankStatement: "Your credit score has hit a sour note. Time to face the music.",
-    severity: "Let this be a lesson in humility and risk management.",
+    id: 'sing-regret-song',
+    challenge: "Sing a Regret Song 🎤",
+    description: "Sing a song of regret.",
+    bankStatement: "Your score hit a sour note.",
+    severity: "A lesson in humility.",
     difficulty: 'medium',
+    type: 'penalty'
+  },
+  {
+    id: 'choose-loan-guarantor',
+    challenge: "Choose a Loan Guarantor 🧑‍🤝‍🧑",
+    description: "Pick someone to back your loan—they must take a shot for you.",
+    bankStatement: "Your credit is so shaky, Booze Bank LTD demands a guarantor. Someone else must share your risk.",
+    severity: "Find a friend willing to vouch for you—with a shot.",
+    difficulty: 'hard',
+    type: 'penalty'
+  },
+  {
+    id: 'guarantor-group-vote',
+    challenge: "Guarantor by Group Vote 🗳️",
+    description: "The group votes for your loan guarantor. That person must take a shot for you.",
+    bankStatement: "Booze Bank LTD has lost trust. The group must decide who will guarantee your loan—with a shot.",
+    severity: "Your fate is in the hands of your peers.",
+    difficulty: 'hard',
     type: 'penalty'
   }
 ];
@@ -93,35 +120,65 @@ function getRandomHardDrinkPenalty(): BankIntervention {
 // Celebration interventions for good credit scores
 const celebrationInterventions: BankIntervention[] = [
   {
+    id: 'champagne-toast',
     challenge: "Champagne Toast 🍾",
-    description: "Booze Bank LTD wishes to acknowledge your exemplary performance. Raise a glass!",
-    bankStatement: "The board at Booze Bank LTD is pleased to announce that your credit score has exceeded all expectations. This calls for a moment of recognition.",
-    severity: "This is not an intervention, but rather a celebration of financial excellence. Booze Bank LTD rarely extends such invitations.",
+    description: "Raise a glass!",
+    bankStatement: "Your score is outstanding.",
+    severity: "A rare celebration from Booze Bank LTD.",
     difficulty: 'easy',
     type: 'celebration'
   },
   {
-    challenge: "Premium Whiskey Tasting 🥃",
-    description: "A small token of Booze Bank LTD's appreciation. Take a sip of something special!",
-    bankStatement: "Your investment strategy has demonstrated remarkable stability and foresight. The board at Booze Bank LTD is impressed.",
-    severity: "Consider this an informal gathering of successful individuals. Your presence honors Booze Bank LTD.",
+    id: 'whiskey-tasting',
+    challenge: "Whiskey Tasting 🥃",
+    description: "Sip something special.",
+    bankStatement: "Your strategy impresses us.",
+    severity: "You're among the best.",
     difficulty: 'easy',
     type: 'celebration'
   },
-  // New unique celebration interventions
   {
+    id: 'victory-dance',
     challenge: "Victory Dance 💃🕺",
-    description: "Celebrate your financial acumen with a dance.",
-    bankStatement: "Your credit score is the envy of the market. Time to show off your moves.",
-    severity: "The board is delighted. Enjoy this moment of glory.",
+    description: "Show off your moves.",
+    bankStatement: "You're the envy of the market.",
+    severity: "Enjoy your glory.",
     difficulty: 'easy',
     type: 'celebration'
   },
   {
+    id: 'share-compliment',
     challenge: "Share a Compliment 🗣️",
-    description: "Spread positivity as a reward for your success.",
-    bankStatement: "Your positive performance uplifts the entire market.",
-    severity: "The board encourages you to inspire others.",
+    description: "Give someone a compliment.",
+    bankStatement: "Your positivity lifts the market.",
+    severity: "Inspire others.",
+    difficulty: 'easy',
+    type: 'celebration'
+  },
+  {
+    id: 'share-the-wealth',
+    challenge: "Share the Wealth! 🥂",
+    description: "Your credit score is stellar! Pick another player to take two sips in your honor.",
+    bankStatement: "Booze Bank LTD is amazed by your financial acumen. Time to spread the good fortune.",
+    severity: "Outstanding performance deserves a toast—by someone else!",
+    difficulty: 'easy',
+    type: 'celebration'
+  },
+  {
+    id: 'toast-to-success',
+    challenge: "Toast to Success 🍻",
+    description: "Choose a player to celebrate your achievement by taking two sips.",
+    bankStatement: "Your portfolio is the envy of the market. Let others join in your celebration.",
+    severity: "Your success is contagious—let someone else drink to it.",
+    difficulty: 'easy',
+    type: 'celebration'
+  },
+  {
+    id: 'generous-banker',
+    challenge: "Generous Banker 🎉",
+    description: "Pick a player to enjoy two sips, courtesy of your excellent credit.",
+    bankStatement: "Booze Bank LTD rewards generosity. Share your good fortune.",
+    severity: "A reward for you, a drink for them.",
     difficulty: 'easy',
     type: 'celebration'
   }
@@ -130,35 +187,38 @@ const celebrationInterventions: BankIntervention[] = [
 // Regular interventions for normal situations
 const regularInterventions: BankIntervention[] = [
   {
+    id: 'sip-of-beer',
     challenge: "Sip of Beer 🍺",
-    description: "A minor course correction is required. Take a sip for Booze Bank LTD.",
-    bankStatement: "Recent market analysis at Booze Bank LTD suggests a need for minor portfolio adjustments. Nothing serious... yet.",
-    severity: "This intervention is merely precautionary. The board at Booze Bank LTD expects full compliance.",
+    description: "Take a sip.",
+    bankStatement: "Minor adjustment needed.",
+    severity: "Just a precaution.",
     difficulty: 'easy',
     type: 'penalty'
   },
   {
+    id: 'half-a-shot',
     challenge: "Half a Shot 🥃",
-    description: "Standard risk management procedure. Take half a shot for Booze Bank LTD.",
-    bankStatement: "Your credit score has shown concerning fluctuations. Booze Bank LTD requires immediate attention to this matter.",
-    severity: "Consider this a gentle reminder of Booze Bank LTD's liquidity requirements.",
+    description: "Take half a shot.",
+    bankStatement: "Your score is fluctuating.",
+    severity: "A gentle reminder.",
     difficulty: 'medium',
     type: 'penalty'
   },
-  // New unique regular interventions
   {
+    id: 'finance-joke',
     challenge: "Tell a Finance Joke 😂",
-    description: "Lighten the mood and reflect on your strategy.",
-    bankStatement: "The board senses tension. A little humor may help.",
-    severity: "This is a minor intervention. Keep your spirits up.",
+    description: "Tell a finance joke.",
+    bankStatement: "Lighten the mood.",
+    severity: "Keep spirits up.",
     difficulty: 'easy',
     type: 'penalty'
   },
   {
+    id: 'deep-breath',
     challenge: "Take a Deep Breath 🧘‍♂️",
-    description: "Pause and reconsider your next move.",
-    bankStatement: "The market is volatile. Stay calm and carry on.",
-    severity: "A gentle nudge to maintain composure.",
+    description: "Pause and breathe.",
+    bankStatement: "Stay calm.",
+    severity: "Maintain composure.",
     difficulty: 'easy',
     type: 'penalty'
   }
@@ -166,10 +226,11 @@ const regularInterventions: BankIntervention[] = [
 
 // Special celebration for first loan
 export const firstLoanCelebrationIntervention: BankIntervention = {
+  id: 'first-loan-cheers',
   challenge: "Cheers! 🍻",
-  description: "We are so happy to have you as a client at Booze Bank LTD. Let's cheers and take a couple sips!",
-  bankStatement: "Welcome to Booze Bank LTD! Your first loan marks the beginning of a prosperous (and boozy) partnership.",
-  severity: "This is a moment to celebrate your new financial journey with Booze Bank LTD.",
+  description: "Cheers and take a sip!",
+  bankStatement: "Welcome to Booze Bank LTD!",
+  severity: "Celebrate your new journey.",
   difficulty: 'easy',
   type: 'celebration'
 }
@@ -178,10 +239,20 @@ export function getRandomIntervention(creditScore: number, needsLoan: boolean): 
   // Credit score ranges
   const BAD_CREDIT = 600;
   const GOOD_CREDIT = 700;
+  const OUTSTANDING_CREDIT = 750;
   
   // If they don't need a loan and have good credit, no intervention needed
   if (!needsLoan && creditScore >= BAD_CREDIT) {
     return null;
+  }
+  
+  // Outstanding client: credit score 750 or higher
+  if (creditScore >= OUTSTANDING_CREDIT) {
+    // Only use the new outstanding celebration interventions
+    const outstandingCelebrations = celebrationInterventions.filter(
+      i => ['share-the-wealth', 'toast-to-success', 'generous-banker'].includes(i.id)
+    );
+    return outstandingCelebrations[Math.floor(Math.random() * outstandingCelebrations.length)];
   }
   
   // Intervention probability based on credit score
@@ -194,8 +265,8 @@ export function getRandomIntervention(creditScore: number, needsLoan: boolean): 
     // 20% chance for celebration when taking a loan with good credit
     interventionChance = 0.2;
   } else if (needsLoan) {
-    // 50% chance if they need a loan with normal credit
-    interventionChance = 0.5;
+    // 10% chance for regular intervention when taking a loan with average credit
+    interventionChance = 0.1;
   }
 
   if (Math.random() > interventionChance) {
@@ -238,4 +309,46 @@ export function getInterventionForBid(creditScore: number, needsLoan: boolean, b
   }
   // Use the original logic otherwise (celebration, regular, or no intervention)
   return getRandomIntervention(creditScore, needsLoan);
+}
+
+function getRandomInterventionByDifficultyAndType(
+  interventions: BankIntervention[],
+  difficulty: 'easy' | 'medium' | 'hard',
+  type?: 'penalty' | 'celebration',
+  lastInterventionId?: string
+): BankIntervention {
+  let filtered = interventions.filter(i => i.difficulty === difficulty);
+  if (type) {
+    filtered = filtered.filter(i => i.type === type);
+  }
+  // Exclude the last intervention if possible
+  if (lastInterventionId && filtered.length > 1) {
+    filtered = filtered.filter(i => i.id !== lastInterventionId);
+  }
+  return filtered[Math.floor(Math.random() * filtered.length)];
+}
+
+// Example usage:
+// getRandomInterventionByDifficultyAndType(penaltyInterventions, 'hard');
+// getRandomInterventionByDifficultyAndType(celebrationInterventions, 'easy', 'celebration'); 
+
+function handleInvestment(playerId: string, investmentAmount: number) {
+  // Find player
+  const player = players.find(p => p.id === playerId);
+  if (!player) return;
+
+  // Update balance
+  player.balance += investmentAmount;
+  player.creditScore = calculateCreditScore(player.balance);
+
+  // Update state/context to trigger re-render
+  setPlayers([...players]);
+}
+
+function calculateCreditScore(balance: number): number {
+  if (balance < -1000000) return 500; // Catastrophic
+  if (balance < 0) return 600;        // Bad
+  if (balance < 100000) return 700;   // Average
+  if (balance < 200000) return 750;   // Good
+  return 850;                         // Excellent
 } 
