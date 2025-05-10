@@ -7,6 +7,7 @@ export type Player = {
   id: string
   name: string
   balance: number
+  creditScore: number
 }
 
 type PlayersContextType = {
@@ -23,13 +24,15 @@ const PlayersContext = createContext<PlayersContextType | undefined>(undefined)
 
 export function PlayersProvider({ children }: { children: React.ReactNode }) {
   const [players, setPlayers] = useState<Player[]>([])
-  const [startingBalance, setStartingBalance] = useState(() => {
-    const saved = localStorage.getItem("realEstateStartingBalance")
-    return saved ? parseInt(saved) : 1000000
-  })
+  const [startingBalance, setStartingBalance] = useState(1000000)
 
-  // Load players from localStorage on mount
+  // Load data from localStorage on mount (client-side only)
   useEffect(() => {
+    const savedBalance = localStorage.getItem("realEstateStartingBalance")
+    if (savedBalance) {
+      setStartingBalance(parseInt(savedBalance))
+    }
+
     const savedPlayers = localStorage.getItem("realEstatePlayers")
     if (savedPlayers) {
       setPlayers(JSON.parse(savedPlayers))
@@ -51,6 +54,7 @@ export function PlayersProvider({ children }: { children: React.ReactNode }) {
       id: Date.now().toString(),
       name,
       balance,
+      creditScore: 750, // Default credit score for new players
     }
     setPlayers((prev) => [...prev, newPlayer])
   }

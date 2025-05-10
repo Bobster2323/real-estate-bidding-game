@@ -4,35 +4,37 @@ import type React from "react"
 
 import { useState } from "react"
 import { useListings } from "@/context/listings-context"
+import { usePlayers } from "@/context/players-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Trash2, Home, Plus, X, LinkIcon, Loader2, AlertTriangle } from "lucide-react"
+import { Trash2, Home, Plus, X } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
-import { fetchOikotieListing } from "../actions"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function AddListingsPage() {
   const { listings, addListing, removeListing } = useListings()
+  const { players } = usePlayers()
   const [title, setTitle] = useState("")
   const [imageUrls, setImageUrls] = useState<string[]>([""])
   const [area, setArea] = useState("")
   const [size, setSize] = useState("")
   const [rooms, setRooms] = useState("")
   const [realPrice, setRealPrice] = useState("")
-  const [oikotieUrl, setOikotieUrl] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+  const [agentId, setAgentId] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const [warning, setWarning] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [autoAddAfterImport, setAutoAddAfterImport] = useState(true)
-  const [previewImages, setPreviewImages] = useState<string[]>([])
 
   const handleAddListing = (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!agentId) {
+      setError("Please select a Kiinteistövälittäjä")
+      return
+    }
 
     // Filter out empty image URLs
     const filteredImages = imageUrls.filter((url) => url.trim() !== "")
@@ -44,6 +46,7 @@ export default function AddListingsPage() {
       size,
       rooms,
       realPrice: Number.parseInt(realPrice, 10) || 0,
+      agentId,
     })
 
     // Reset form
@@ -53,79 +56,13 @@ export default function AddListingsPage() {
     setSize("")
     setRooms("")
     setRealPrice("")
-    setPreviewImages([])
+    setAgentId("")
     setSuccess("Listing added successfully!")
 
     // Clear success message after 3 seconds
     setTimeout(() => {
       setSuccess(null)
     }, 3000)
-  }
-
-  const fetchFromOikotie = async () => {
-    if (!oikotieUrl.trim()) {
-      setError("Please enter an Oikotie URL")
-      return
-    }
-
-    setIsLoading(true)
-    setError(null)
-    setWarning(null)
-    setPreviewImages([])
-
-    try {
-      const data = await fetchOikotieListing(oikotieUrl)
-
-      // If there's an error message but we still have data, show it as a warning
-      if (data.error) {
-        setWarning(data.error)
-      }
-
-      // Populate form with fetched data
-      setTitle(data.title || "")
-      setImageUrls(data.images.length > 0 ? data.images : [""])
-      setPreviewImages(data.images)
-      setArea(data.area || "")
-      setSize(data.size || "")
-      setRooms(data.rooms || "")
-      setRealPrice(data.realPrice ? data.realPrice.toString() : "")
-
-      // If auto-add is enabled, add the listing immediately
-      if (autoAddAfterImport && data.title && data.realPrice) {
-        // Add the listing to the context
-        addListing({
-          title: data.title,
-          images: data.images,
-          area: data.area || "",
-          size: data.size || "",
-          rooms: data.rooms || "",
-          realPrice: data.realPrice || 0,
-        })
-
-        // Reset form after adding
-        setTitle("")
-        setImageUrls([""])
-        setArea("")
-        setSize("")
-        setRooms("")
-        setRealPrice("")
-        setPreviewImages([])
-
-        setSuccess("Listing imported and added successfully!")
-      } else {
-        setSuccess("Successfully retrieved listing information! Click 'Add Listing' to save it.")
-      }
-
-      // Clear success message after 5 seconds
-      setTimeout(() => {
-        setSuccess(null)
-      }, 5000)
-    } catch (err) {
-      console.error("Error in component:", err)
-      setError("Failed to fetch listing information. Please try again.")
-    } finally {
-      setIsLoading(false)
-    }
   }
 
   const addImageField = () => {
@@ -160,78 +97,6 @@ export default function AddListingsPage() {
         </Link>
       </div>
 
-      {/* Oikotie URL Import */}
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="text-2xl">Import from Oikotie</CardTitle>
-          <CardDescription>Paste an Oikotie listing URL to automatically import property details</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2 mb-4">
-            <div className="flex-grow">
-              <Input
-                value={oikotieUrl}
-                onChange={(e) => setOikotieUrl(e.target.value)}
-                placeholder="https://asunnot.oikotie.fi/myytavat-asunnot/..."
-                className="text-lg p-6"
-              />
-            </div>
-            <Button onClick={fetchFromOikotie} disabled={isLoading} className="h-14 px-6">
-              {isLoading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <LinkIcon className="h-5 w-5 mr-2" />}
-              Import
-            </Button>
-          </div>
-
-          <div className="flex items-center space-x-2 mb-4">
-            <Checkbox
-              id="auto-add"
-              checked={autoAddAfterImport}
-              onCheckedChange={(checked) => setAutoAddAfterImport(checked === true)}
-              className="h-5 w-5"
-            />
-            <Label htmlFor="auto-add" className="text-base cursor-pointer">
-              Automatically add listing after successful import
-            </Label>
-          </div>
-
-          {error && (
-            <Alert variant="destructive" className="mt-4">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {warning && (
-            <Alert className="mt-4 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800">
-              <AlertTriangle className="h-4 w-4 mr-2" />
-              <AlertTitle>Notice</AlertTitle>
-              <AlertDescription>{warning}</AlertDescription>
-            </Alert>
-          )}
-
-          {success && (
-            <Alert className="mt-4 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800">
-              <AlertTitle>Success</AlertTitle>
-              <AlertDescription>{success}</AlertDescription>
-            </Alert>
-          )}
-
-          {/* Image Preview */}
-          {previewImages.length > 0 && (
-            <div className="mt-6">
-              <h3 className="text-lg font-medium mb-2">Image Preview</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {previewImages.map((img, index) => (
-                  <div key={index} className="relative aspect-[4/3] rounded-md overflow-hidden bg-muted">
-                    <Image src={img || "/placeholder.svg"} alt={`Preview ${index + 1}`} fill className="object-cover" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Add Listing Form */}
         <Card>
@@ -241,6 +106,27 @@ export default function AddListingsPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleAddListing} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="agent" className="text-lg">
+                  Kiinteistövälittäjä
+                </Label>
+                <Select value={agentId} onValueChange={setAgentId}>
+                  <SelectTrigger className="text-lg p-6">
+                    <SelectValue placeholder="Select the agent for this listing" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {players.map((player) => (
+                      <SelectItem key={player.id} value={player.id}>
+                        {player.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  The selected player will be the agent for this listing and cannot bid on it
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="title" className="text-lg">
                   Title
@@ -340,6 +226,20 @@ export default function AddListingsPage() {
                 />
               </div>
 
+              {error && (
+                <Alert variant="destructive">
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              {success && (
+                <Alert className="bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800">
+                  <AlertTitle>Success</AlertTitle>
+                  <AlertDescription>{success}</AlertDescription>
+                </Alert>
+              )}
+
               <Button type="submit" size="lg" className="w-full text-xl py-6">
                 Add Listing
               </Button>
@@ -357,41 +257,37 @@ export default function AddListingsPage() {
               <p className="text-muted-foreground mt-2">Add your first listing using the form.</p>
             </div>
           ) : (
-            <div className="space-y-4 max-h-[800px] overflow-y-auto pr-2">
-              {listings.map((listing) => (
+            <div className="space-y-4 max-h-[800px] overflow-y-auto pr-2 relative">
+              {listings.map((listing, index) => (
                 <Card key={listing.id} className="relative">
                   <CardContent className="pt-6">
+                    {/* Blurred placeholder content */}
                     <div className="flex gap-4">
-                      <div className="w-24 h-24 relative rounded overflow-hidden flex-shrink-0 bg-muted">
-                        {listing.images.length > 0 ? (
-                          <Image
-                            src={listing.images[0] || "/placeholder.svg"}
-                            alt={listing.title}
-                            fill
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full text-muted-foreground">No image</div>
-                        )}
-                      </div>
-                      <div className="flex-grow">
-                        <h3 className="text-xl font-medium line-clamp-1">{listing.title}</h3>
-                        <div className="flex flex-wrap gap-x-4 mt-1 text-muted-foreground">
-                          <span>{listing.area}</span>
-                          <span>{listing.size}</span>
-                          <span>{listing.rooms}</span>
+                      <div className="w-24 h-24 bg-muted rounded" />
+                      <div className="flex-grow space-y-4">
+                        <div className="h-6 bg-muted rounded w-3/4" />
+                        <div className="flex gap-2">
+                          <div className="h-4 bg-muted rounded w-20" />
+                          <div className="h-4 bg-muted rounded w-20" />
+                          <div className="h-4 bg-muted rounded w-20" />
                         </div>
-                        <div className="mt-2 font-medium">€{listing.realPrice.toLocaleString()}</div>
+                        <div className="h-6 bg-muted rounded w-1/3" />
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeListing(listing.id)}
-                        className="h-10 w-10 text-destructive absolute top-4 right-4"
-                      >
-                        <Trash2 size={20} />
-                      </Button>
                     </div>
+
+                    {/* Delete button */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to remove listing ${index + 1}?`)) {
+                          removeListing(listing.id)
+                        }
+                      }}
+                      className="h-10 w-10 text-destructive absolute top-4 right-4"
+                    >
+                      <Trash2 size={20} />
+                    </Button>
                   </CardContent>
                 </Card>
               ))}

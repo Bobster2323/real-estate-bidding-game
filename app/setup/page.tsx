@@ -1,18 +1,22 @@
 "use client"
 
 import { usePlayers } from "@/context/players-context"
+import { useCredit } from "@/context/credit-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useState, useEffect } from "react"
 import { X } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useListings } from "@/context/listings-context"
 
 export default function SetupPage() {
   const { players, addPlayer, removePlayer } = usePlayers()
+  const { initializeCredit, removeCredit } = useCredit()
   const [newPlayerName, setNewPlayerName] = useState("")
   const [startingBalance, setStartingBalance] = useState(1000000)
   const { startingBalance: contextStartingBalance, setStartingBalance: setContextStartingBalance } = usePlayers()
   const router = useRouter()
+  const { resetGame } = useListings()
 
   useEffect(() => {
     setStartingBalance(contextStartingBalance)
@@ -21,13 +25,21 @@ export default function SetupPage() {
   const handleAddPlayer = (e: React.FormEvent) => {
     e.preventDefault()
     if (newPlayerName.trim()) {
+      const playerId = Date.now().toString()
       addPlayer(newPlayerName.trim(), startingBalance)
+      initializeCredit(playerId)
       setNewPlayerName("")
     }
   }
 
+  const handleRemovePlayer = (id: string) => {
+    removePlayer(id)
+    removeCredit(id)
+  }
+
   const handleStartGame = () => {
     if (players.length > 0) {
+      resetGame()
       setContextStartingBalance(startingBalance)
       router.push("/game")
     }
@@ -39,7 +51,7 @@ export default function SetupPage() {
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-4">Player Setup</h1>
           <p className="text-xl text-muted-foreground">
-            Add players to start the game. Each player starts with €{startingBalance.toLocaleString()}.
+            Add players to start the game. Each player starts with €{Math.floor(startingBalance).toLocaleString()}.
           </p>
         </div>
 
@@ -85,7 +97,7 @@ export default function SetupPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => removePlayer(player.id)}
+                  onClick={() => handleRemovePlayer(player.id)}
                   className="text-destructive hover:text-destructive"
                 >
                   <X size={20} />

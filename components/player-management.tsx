@@ -1,21 +1,30 @@
 "use client"
 
 import { usePlayers } from "@/context/players-context"
+import { useCredit } from "@/context/credit-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useState } from "react"
 import { X } from "lucide-react"
 
 export function PlayerManagement() {
-  const { players, addPlayer, removePlayer } = usePlayers()
+  const { players, addPlayer, removePlayer, startingBalance } = usePlayers()
+  const { initializeCredit, removeCredit } = useCredit()
   const [newPlayerName, setNewPlayerName] = useState("")
 
   const handleAddPlayer = (e: React.FormEvent) => {
     e.preventDefault()
     if (newPlayerName.trim()) {
-      addPlayer(newPlayerName.trim())
+      const playerId = Date.now().toString() // Generate ID here to use for both player and credit
+      addPlayer(newPlayerName.trim(), startingBalance)
+      initializeCredit(playerId) // Initialize credit score for new player
       setNewPlayerName("")
     }
+  }
+
+  const handleRemovePlayer = (id: string) => {
+    removePlayer(id)
+    removeCredit(id) // Clean up credit score when player is removed
   }
 
   return (
@@ -44,13 +53,13 @@ export function PlayerManagement() {
             <div>
               <div className="font-medium">{player.name}</div>
               <div className="text-sm text-muted-foreground">
-                Balance: €{player.balance.toLocaleString()}
+                Balance: €{Math.floor(player.balance).toLocaleString()}
               </div>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => removePlayer(player.id)}
+              onClick={() => handleRemovePlayer(player.id)}
               className="text-destructive hover:text-destructive"
             >
               <X size={20} />

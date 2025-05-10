@@ -300,19 +300,18 @@ export default function ScoresPage() {
                 {rounds.map((round) => (
                   <TableRow key={round.id}>
                     <TableCell className="font-medium">{round.propertyName}</TableCell>
-                    <TableCell className="text-right">€{round.realPrice.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">€{Math.floor(round.realPrice).toLocaleString()}</TableCell>
                     {players.map((player) => {
                       const playerBid = round.playerBids.find((pb) => pb.playerId === player.id)
                       return (
                         <TableCell key={player.id} className="text-right">
                           {playerBid ? (
                             <div>
-                              €{playerBid.bid.toLocaleString()}
+                              €{Math.floor(playerBid.bid).toLocaleString()}
                               <div
                                 className={`text-xs ${playerBid.difference > 0 ? "text-red-500" : playerBid.difference < 0 ? "text-amber-500" : "text-green-500"}`}
                               >
-                                {playerBid.difference > 0 ? "+" : ""}
-                                {playerBid.difference.toLocaleString()}
+                                {playerBid.difference > 0 ? "+" : ""}{Math.floor(playerBid.difference).toLocaleString()}
                               </div>
                             </div>
                           ) : (

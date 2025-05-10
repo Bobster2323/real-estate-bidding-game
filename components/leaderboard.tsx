@@ -1,104 +1,89 @@
 "use client"
 
 import { usePlayers } from "@/context/players-context"
-import { Trophy, TrendingUp, TrendingDown, Crown, Skull } from "lucide-react"
+import { useCredit } from "@/context/credit-context"
+import { Trophy, TrendingUp, TrendingDown } from "lucide-react"
 
 export function Leaderboard() {
-  const { players } = usePlayers()
+  const { players, startingBalance } = usePlayers()
+  const { getCreditScore, getInterestRate } = useCredit()
 
   // Sort players by balance in descending order
   const sortedPlayers = [...players].sort((a, b) => b.balance - a.balance)
 
-  // Find the player with the highest profit/loss
-  const highestProfit = Math.max(...players.map(p => p.balance - 1000000))
-  const lowestProfit = Math.min(...players.map(p => p.balance - 1000000))
+  // Determine credit rating and color
+  const getCreditRating = (score: number) => {
+    if (score >= 800) return { rating: "Excellent", color: "text-green-500" }
+    if (score >= 700) return { rating: "Good", color: "text-emerald-500" }
+    if (score >= 600) return { rating: "Fair", color: "text-yellow-500" }
+    if (score >= 500) return { rating: "Poor", color: "text-orange-500" }
+    return { rating: "Bad", color: "text-red-500" }
+  }
 
   return (
     <div className="bg-card rounded-xl p-4 shadow-lg border border-border/50">
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-6">
         <Trophy className="w-6 h-6 text-yellow-500" />
         <div>
           <h2 className="text-xl font-bold">Leaderboard</h2>
-          <p className="text-xs text-muted-foreground">Starting balance: €1,000,000</p>
+          <p className="text-xs text-muted-foreground">Starting balance: €{Math.floor(startingBalance).toLocaleString()}</p>
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-4">
         {sortedPlayers.map((player, index) => {
-          const profit = player.balance - 1000000
-          const isHighest = profit === highestProfit
-          const isLowest = profit === lowestProfit
-          const profitPercentage = ((profit / 1000000) * 100).toFixed(1)
+          const profit = player.balance - startingBalance
+          const profitPercentage = ((profit / startingBalance) * 100).toFixed(1)
+          const creditScore = getCreditScore(player.id)
+          const { rating, color } = getCreditRating(creditScore)
+          const interestRate = getInterestRate(player.id)
 
           return (
             <div
               key={player.id}
-              className={`relative overflow-hidden group ${
-                index === 0
-                  ? "bg-gradient-to-r from-yellow-500/20 to-yellow-500/5"
-                  : index === 1
-                  ? "bg-gradient-to-r from-gray-400/20 to-gray-400/5"
-                  : index === 2
-                  ? "bg-gradient-to-r from-amber-700/20 to-amber-700/5"
-                  : "bg-muted/50"
-              } rounded-lg p-3 transition-all hover:scale-[1.02] hover:shadow-md`}
+              className="relative bg-muted/30 rounded-xl transition-all overflow-hidden border border-border/50 shadow-sm hover:shadow-md"
             >
-              {/* Position indicator */}
-              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-primary to-primary/50 opacity-50" />
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {/* Rank circle */}
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-base ${
-                      index === 0
-                        ? "bg-yellow-500 text-yellow-950"
-                        : index === 1
-                        ? "bg-gray-400 text-gray-950"
-                        : index === 2
-                        ? "bg-amber-700 text-amber-50"
-                        : "bg-muted-foreground/20 text-foreground"
-                    }`}
-                  >
-                    {index + 1}
-                  </div>
+              {/* Rank indicator bar */}
+              <div 
+                className={`absolute left-0 top-0 bottom-0 w-1 ${index === 0 ? "bg-yellow-500" : index === 1 ? "bg-zinc-400" : "bg-bronze-500"}`}
+              />
 
-                  {/* Player info */}
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold">{player.name}</span>
-                      {isHighest && <Crown className="w-4 h-4 text-green-500" />}
-                      {isLowest && <Skull className="w-4 h-4 text-red-500" />}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {profit >= 0 ? (
-                        <TrendingUp className="w-3 h-3 text-green-500" />
-                      ) : (
-                        <TrendingDown className="w-3 h-3 text-red-500" />
-                      )}
-                      <span
-                        className={`text-xs font-medium ${
-                          profit >= 0 ? "text-green-500" : "text-red-500"
-                        }`}
-                      >
-                        {profit >= 0 ? "+" : ""}
-                        {profitPercentage}%
-                      </span>
-                    </div>
-                  </div>
+              {/* Main player info */}
+              <div className="p-4 flex items-center gap-4">
+                {/* Rank number */}
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium border ${
+                  index === 0 ? "bg-yellow-500/10 border-yellow-500/50 text-yellow-500" :
+                  index === 1 ? "bg-zinc-500/10 border-zinc-500/50 text-zinc-500" :
+                  "bg-bronze-500/10 border-bronze-500/50 text-bronze-500"
+                }`}>
+                  {index + 1}
                 </div>
 
-                {/* Balance */}
-                <div className="text-right">
-                  <div className="font-bold">
-                    €{player.balance.toLocaleString()}
+                {/* Player name and balance */}
+                <div className="flex-grow">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-lg">{player.name}</span>
+                    <div className={`text-sm font-medium ${profit >= 0 ? "text-green-500" : "text-red-500"} flex items-center gap-1`}>
+                      {profit >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                      {profit >= 0 ? "+" : ""}€{Math.floor(Math.abs(profit)).toLocaleString()}
+                    </div>
                   </div>
-                  <div
-                    className={`text-xs font-medium ${
-                      profit >= 0 ? "text-green-500" : "text-red-500"
-                    }`}
-                  >
-                    {profit >= 0 ? "+" : ""}€{Math.abs(profit).toLocaleString()}
+                  <div className="text-xl font-bold">€{Math.floor(player.balance).toLocaleString()}</div>
+                </div>
+              </div>
+
+              {/* Credit info - separated by a subtle border */}
+              <div className="border-t border-border/10 bg-black/5 px-4 py-2 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="text-sm text-muted-foreground">Credit Score</div>
+                  <div className={`text-sm font-medium ${color}`}>
+                    {creditScore}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-sm text-muted-foreground">Interest Rate</div>
+                  <div className="text-sm font-medium">
+                    {(interestRate * 100).toFixed(1)}%
                   </div>
                 </div>
               </div>

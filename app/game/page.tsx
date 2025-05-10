@@ -1,19 +1,33 @@
 "use client"
 
 import { useListings } from "@/context/listings-context"
+import { usePlayers } from "@/context/players-context"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ChevronLeft, ChevronRight, Home, ImageIcon } from "lucide-react"
 import Image from "next/image"
 import { Leaderboard } from "@/components/leaderboard"
 import { BiddingControls } from "@/components/bidding-controls"
+import { FinalScore } from "@/components/final-score"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 export default function GamePage() {
   const { currentListing, showPrice, nextListing, previousListing, currentListingIndex, listings } = useListings()
+  const { players } = usePlayers()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [showFinalScore, setShowFinalScore] = useState(false)
+
+  // Show final score when we've played all listings and revealed the last price
+  useEffect(() => {
+    if (currentListingIndex === listings.length - 1 && showPrice) {
+      const timer = setTimeout(() => {
+        setShowFinalScore(true)
+      }, 10000) // Wait 10 seconds after the last reveal
+      return () => clearTimeout(timer)
+    }
+  }, [currentListingIndex, listings.length, showPrice])
 
   if (!currentListing) {
     return (
@@ -96,12 +110,15 @@ export default function GamePage() {
         {/* Middle Column - Property Details */}
         <div className="col-span-6 min-w-[500px] overflow-auto">
           <div className="space-y-4">
-            {/* Property Title */}
+            {/* Property Title and Agent */}
             <div>
               <h1 className="text-2xl font-bold">{currentListing.title}</h1>
-              <p className="text-muted-foreground">
-                {currentListing.area} · {currentListing.size} · {currentListing.rooms}
-              </p>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span>{currentListing.area} · {currentListing.size} · {currentListing.rooms}</span>
+                <span className="text-sm px-2 py-1 bg-muted rounded-full">
+                  Agent: {players.find(p => p.id === currentListing.agentId)?.name}
+                </span>
+              </div>
             </div>
 
             {/* Main Image */}
@@ -187,6 +204,11 @@ export default function GamePage() {
           <BiddingControls />
         </div>
       </main>
+
+      {/* Final Score Overlay */}
+      <AnimatePresence>
+        {showFinalScore && <FinalScore />}
+      </AnimatePresence>
     </div>
   )
 }

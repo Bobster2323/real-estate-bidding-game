@@ -4,7 +4,7 @@ import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ListingsProvider } from "@/context/listings-context"
 import { PlayersProvider } from "@/context/players-context"
-import { ModeToggle } from "@/components/mode-toggle"
+import { CreditProvider } from "@/context/credit-context"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -20,12 +20,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <ListingsProvider>
             <PlayersProvider>
-              <div className="min-h-screen bg-background">
-                <div className="absolute top-4 right-4 z-10">
-                  <ModeToggle />
+              <CreditProvider>
+                <div className="min-h-screen bg-background">
+                  {children}
                 </div>
-                {children}
-              </div>
+              </CreditProvider>
             </PlayersProvider>
           </ListingsProvider>
         </ThemeProvider>

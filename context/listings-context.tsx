@@ -12,12 +12,23 @@ export type Listing = {
   size: string
   rooms: string
   realPrice: number
+  agentId: string // ID of the player who added this listing
+  bidResult?: {
+    playerName: string
+    bidAmount: number
+    loanAmount: number
+    interestRate: number
+    realPrice: number
+    profit: number
+  }
 }
 
 type ListingsContextType = {
   listings: Listing[]
+  currentListing: Listing | null
   currentListingIndex: number
   showPrice: boolean
+  setShowPrice: (show: boolean) => void
   addListing: (listing: Omit<Listing, "id">) => void
   removeListing: (id: string) => void
   nextListing: () => void
@@ -25,7 +36,8 @@ type ListingsContextType = {
   revealPrice: () => void
   hidePrice: () => void
   resetGame: () => void
-  currentListing: Listing | null
+  canPlayerBid: (playerId: string) => boolean
+  setBidResult: (result: Listing['bidResult']) => void
 }
 
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined)
@@ -62,7 +74,7 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
 
   const nextListing = () => {
     if (currentListingIndex < listings.length - 1) {
-      setCurrentListingIndex((prev) => prev + 1)
+      setCurrentListingIndex(currentListingIndex + 1)
       setShowPrice(false)
     }
   }
@@ -85,16 +97,37 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
   const resetGame = () => {
     setCurrentListingIndex(0)
     setShowPrice(false)
+    // Clear all bid results
+    setListings(prev => prev.map(listing => ({
+      ...listing,
+      bidResult: undefined
+    })))
   }
 
   const currentListing = listings.length > 0 ? listings[currentListingIndex] : null
+
+  const canPlayerBid = (playerId: string) => {
+    if (!currentListing) return false
+    return currentListing.agentId !== playerId
+  }
+
+  const setBidResult = (result: Listing['bidResult']) => {
+    setListings(prev => prev.map((listing, index) => {
+      if (index === currentListingIndex) {
+        return { ...listing, bidResult: result }
+      }
+      return listing
+    }))
+  }
 
   return (
     <ListingsContext.Provider
       value={{
         listings,
+        currentListing: listings[currentListingIndex] || null,
         currentListingIndex,
         showPrice,
+        setShowPrice,
         addListing,
         removeListing,
         nextListing,
@@ -102,7 +135,8 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
         revealPrice,
         hidePrice,
         resetGame,
-        currentListing,
+        canPlayerBid,
+        setBidResult,
       }}
     >
       {children}
