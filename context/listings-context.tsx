@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
+import { supabase } from "@/lib/supabaseClient"
 
 export type Listing = {
   id: string
@@ -12,7 +13,6 @@ export type Listing = {
   size: string
   rooms: string
   realPrice: number
-  agentId: string // ID of the player who added this listing
   bidResult?: {
     playerName: string
     bidAmount: number
@@ -38,6 +38,7 @@ type ListingsContextType = {
   resetGame: () => void
   canPlayerBid: (playerId: string) => boolean
   setBidResult: (result: Listing['bidResult']) => void
+  refetchListings: () => void
 }
 
 const ListingsContext = createContext<ListingsContextType | undefined>(undefined)
@@ -47,18 +48,24 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
   const [currentListingIndex, setCurrentListingIndex] = useState(0)
   const [showPrice, setShowPrice] = useState(false)
 
-  // Load listings from localStorage on mount
-  useEffect(() => {
-    const savedListings = localStorage.getItem("realEstateListings")
-    if (savedListings) {
-      setListings(JSON.parse(savedListings))
+  // Fetch listings from Supabase on mount
+  async function fetchListings() {
+    const { data, error } = await supabase
+      .from('listings')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (error) {
+      console.error('Failed to fetch listings from Supabase:', error);
+      return;
     }
-  }, [])
+    setListings(data || []);
+  }
 
-  // Save listings to localStorage when they change
   useEffect(() => {
-    localStorage.setItem("realEstateListings", JSON.stringify(listings))
-  }, [listings])
+    fetchListings();
+  }, []);
+
+  const refetchListings = fetchListings;
 
   const addListing = (listing: Omit<Listing, "id">) => {
     const newListing = {
@@ -108,7 +115,7 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
 
   const canPlayerBid = (playerId: string) => {
     if (!currentListing) return false
-    return currentListing.agentId !== playerId
+    return true
   }
 
   const setBidResult = (result: Listing['bidResult']) => {
@@ -137,6 +144,7 @@ export function ListingsProvider({ children }: { children: React.ReactNode }) {
         resetGame,
         canPlayerBid,
         setBidResult,
+        refetchListings,
       }}
     >
       {children}

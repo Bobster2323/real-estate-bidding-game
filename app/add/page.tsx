@@ -14,9 +14,10 @@ import Link from "next/link"
 import Image from "next/image"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { addListingToSupabase, uploadListingImage } from "@/lib/supabaseGame"
 
 export default function AddListingsPage() {
-  const { listings, addListing, removeListing } = useListings()
+  const { listings, addListing, removeListing, refetchListings } = useListings()
   const { players } = usePlayers()
   const [title, setTitle] = useState("")
   const [imageUrls, setImageUrls] = useState<string[]>([""])
@@ -24,45 +25,37 @@ export default function AddListingsPage() {
   const [size, setSize] = useState("")
   const [rooms, setRooms] = useState("")
   const [realPrice, setRealPrice] = useState("")
-  const [agentId, setAgentId] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null)
 
-  const handleAddListing = (e: React.FormEvent) => {
+  const handleAddListing = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!agentId) {
-      setError("Please select a Kiinteistövälittäjä")
-      return
-    }
-
+    setError(null)
+    setSuccess(null)
     // Filter out empty image URLs
     const filteredImages = imageUrls.filter((url) => url.trim() !== "")
-
-    addListing({
-      title,
-      images: filteredImages,
-      area,
-      size,
-      rooms,
-      realPrice: Number.parseInt(realPrice, 10) || 0,
-      agentId,
-    })
-
-    // Reset form
-    setTitle("")
-    setImageUrls([""])
-    setArea("")
-    setSize("")
-    setRooms("")
-    setRealPrice("")
-    setAgentId("")
-    setSuccess("Listing added successfully!")
-
-    // Clear success message after 3 seconds
-    setTimeout(() => {
-      setSuccess(null)
-    }, 3000)
+    try {
+      await addListingToSupabase({
+        title,
+        images: filteredImages,
+        area,
+        size,
+        rooms,
+        realPrice: Number.parseInt(realPrice, 10) || 0,
+      })
+      refetchListings()
+      setTitle("")
+      setImageUrls([""])
+      setArea("")
+      setSize("")
+      setRooms("")
+      setRealPrice("")
+      setSuccess("Listing added successfully!")
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err: any) {
+      setError(err.message || "Failed to add listing.")
+    }
   }
 
   const addImageField = () => {
@@ -82,6 +75,19 @@ export default function AddListingsPage() {
       setImageUrls(newUrls)
     } else {
       setImageUrls([""])
+    }
+  }
+
+  // Upload handler for image file
+  const handleImageUpload = async (index: number, file: File) => {
+    setUploadingIndex(index)
+    try {
+      const url = await uploadListingImage(file)
+      updateImageUrl(index, url)
+    } catch (err: any) {
+      setError("Failed to upload image: " + (err.message || err.toString()))
+    } finally {
+      setUploadingIndex(null)
     }
   }
 
@@ -107,27 +113,6 @@ export default function AddListingsPage() {
           <CardContent>
             <form onSubmit={handleAddListing} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="agent" className="text-lg">
-                  Kiinteistövälittäjä
-                </Label>
-                <Select value={agentId} onValueChange={setAgentId}>
-                  <SelectTrigger className="text-lg p-6">
-                    <SelectValue placeholder="Select the agent for this listing" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {players.map((player) => (
-                      <SelectItem key={player.id} value={player.id}>
-                        {player.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-sm text-muted-foreground">
-                  The selected player will be the agent for this listing and cannot bid on it
-                </p>
-              </div>
-
-              <div className="space-y-2">
                 <Label htmlFor="title" className="text-lg">
                   Title
                 </Label>
@@ -145,13 +130,33 @@ export default function AddListingsPage() {
                 <Label className="text-lg">Images</Label>
                 <p className="text-sm text-muted-foreground mb-2">Add multiple images to showcase the property</p>
                 {imageUrls.map((url, index) => (
-                  <div key={index} className="flex gap-2">
+                  <div key={index} className="flex gap-2 items-center">
                     <Input
                       value={url}
                       onChange={(e) => updateImageUrl(index, e.target.value)}
                       placeholder="Image URL"
                       className="text-lg p-6"
                     />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      id={`file-upload-${index}`}
+                      onChange={e => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleImageUpload(index, e.target.files[0])
+                        }
+                      }}
+                    />
+                    <label htmlFor={`file-upload-${index}`} className="cursor-pointer">
+                      <Button type="button" variant="outline" size="icon" className="h-14 w-14 flex-shrink-0">
+                        {uploadingIndex === index ? (
+                          <span className="animate-spin">⏳</span>
+                        ) : (
+                          <span role="img" aria-label="Upload">⬆️</span>
+                        )}
+                      </Button>
+                    </label>
                     <Button
                       type="button"
                       variant="outline"

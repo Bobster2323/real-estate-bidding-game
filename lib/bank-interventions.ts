@@ -351,4 +351,35 @@ function calculateCreditScore(balance: number): number {
   if (balance < 100000) return 700;   // Average
   if (balance < 200000) return 750;   // Good
   return 850;                         // Excellent
+}
+
+export async function fetchRandomProperties(count: number): Promise<Omit<Listing, "id">[]> {
+  try {
+    const response = await fetch(`${RENTCAST_API_URL}/listings/sale?limit=${count}`, {
+      headers: {
+        "X-Api-Key": RENTCAST_API_KEY,
+        "Accept": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`RentCast API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const listings = Array.isArray(data) ? data : data.listings || [];
+
+    return listings.map((property: any) => ({
+      title: property.formattedAddress || `${property.addressLine1}, ${property.city}, ${property.state}`,
+      area: `${property.city}, ${property.state}`,
+      size: `${property.squareFootage || "?"} sqft`,
+      rooms: `${property.bedrooms || "?"} beds, ${property.bathrooms || "?"} baths`,
+      images: property.photos?.map((photo: any) => photo.url) || [],
+      realPrice: property.price || 0,
+      agentId: "",
+    }));
+  } catch (error) {
+    console.error("Error fetching properties from RentCast:", error);
+    throw error;
+  }
 } 

@@ -4,12 +4,17 @@ import { usePlayers } from "@/context/players-context"
 import { useCredit } from "@/context/credit-context"
 import { Trophy, TrendingUp, TrendingDown } from "lucide-react"
 
-export function Leaderboard() {
-  const { players, startingBalance } = usePlayers()
-  const { getCreditScore, getInterestRate } = useCredit()
+export function Leaderboard({ players: propPlayers, startingBalance: propStartingBalance }: {
+  players?: any[];
+  startingBalance?: number;
+} = {}) {
+  const context = usePlayers();
+  const { getCreditScore, getInterestRate } = useCredit();
+  const players = propPlayers || context.players;
+  const startingBalance = propStartingBalance ?? context.startingBalance;
 
   // Sort players by balance in descending order
-  const sortedPlayers = [...players].sort((a, b) => b.balance - a.balance)
+  const sortedPlayers = [...players].sort((a, b) => (b.balance || 0) - (a.balance || 0));
 
   // Determine credit rating and color
   const getCreditRating = (score: number) => {
@@ -32,11 +37,11 @@ export function Leaderboard() {
 
       <div className="space-y-4">
         {sortedPlayers.map((player, index) => {
-          const profit = player.balance - startingBalance
-          const profitPercentage = ((profit / startingBalance) * 100).toFixed(1)
-          const creditScore = getCreditScore(player.id)
-          const { rating, color } = getCreditRating(creditScore)
-          const interestRate = getInterestRate(player.id)
+          const profit = (player.balance || 0) - startingBalance;
+          const profitPercentage = ((profit / startingBalance) * 100).toFixed(1);
+          const creditScore = getCreditScore(player.id);
+          const { rating, color } = getCreditRating(creditScore);
+          const interestRate = getInterestRate(player.id);
 
           return (
             <div
@@ -68,7 +73,7 @@ export function Leaderboard() {
                       {profit >= 0 ? "+" : ""}€{Math.floor(Math.abs(profit)).toLocaleString()}
                     </div>
                   </div>
-                  <div className="text-xl font-bold">€{Math.floor(player.balance).toLocaleString()}</div>
+                  <div className="text-xl font-bold">€{Math.floor(player.balance || 0).toLocaleString()}</div>
                 </div>
               </div>
 

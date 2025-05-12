@@ -3,8 +3,23 @@
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { Home } from "lucide-react"
+import { useGameSession } from "@/context/game-session-context"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { createGame } from "@/lib/supabaseGame"
 
 export default function HomePage() {
+  const { joinSession } = useGameSession()
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+
+  const handleCreateGame = async () => {
+    setLoading(true)
+    const game = await createGame()
+    await joinSession(game.id)
+    router.push(`/host/${game.id}`)
+  }
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center">
       <div className="flex items-center gap-2 mb-8">
@@ -15,11 +30,14 @@ export default function HomePage() {
         A local multiplayer game where players bid on real estate properties and try to make the best deals.
       </p>
       <div className="flex gap-4">
-        <Link href="/setup">
-          <Button size="lg" className="text-xl py-6 px-8">
-            Start New Game
-          </Button>
-        </Link>
+        <Button
+          size="lg"
+          className="text-xl py-6 px-8"
+          onClick={handleCreateGame}
+          disabled={loading}
+        >
+          {loading ? "Creating..." : "Create Game"}
+        </Button>
         <Link href="/add">
           <Button size="lg" variant="outline" className="text-xl py-6 px-8">
             Add Listings

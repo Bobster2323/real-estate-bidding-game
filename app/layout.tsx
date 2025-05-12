@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { ListingsProvider } from "@/context/listings-context"
 import { PlayersProvider } from "@/context/players-context"
 import { CreditProvider } from "@/context/credit-context"
+import { GameSessionProvider } from "@/context/game-session-context"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -18,15 +19,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <ListingsProvider>
-            <PlayersProvider>
-              <CreditProvider>
-                <div className="min-h-screen bg-background">
-                  {children}
-                </div>
-              </CreditProvider>
-            </PlayersProvider>
-          </ListingsProvider>
+          <GameSessionProvider>
+            <ListingsProvider>
+              <PlayersProvider>
+                <CreditProvider>
+                  <div className="min-h-screen bg-background">
+                    {children}
+                  </div>
+                </CreditProvider>
+              </PlayersProvider>
+            </ListingsProvider>
+          </GameSessionProvider>
         </ThemeProvider>
       </body>
     </html>

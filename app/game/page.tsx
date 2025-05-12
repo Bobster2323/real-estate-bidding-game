@@ -1,7 +1,6 @@
 "use client"
 
 import { useListings } from "@/context/listings-context"
-import { usePlayers } from "@/context/players-context"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { useState, useEffect } from "react"
@@ -12,12 +11,21 @@ import { BiddingControls } from "@/components/bidding-controls"
 import { FinalScore } from "@/components/final-score"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
+import { useGameSession } from "@/context/game-session-context"
 
 export default function GamePage() {
   const { currentListing, showPrice, nextListing, previousListing, currentListingIndex, listings } = useListings()
-  const { players } = usePlayers()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [showFinalScore, setShowFinalScore] = useState(false)
+  const { currentSession } = useGameSession()
+  const gameId = currentSession?.id
+  const [playerId, setPlayerId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setPlayerId(localStorage.getItem("supabasePlayerId"))
+    }
+  }, [])
 
   // Show final score when we've played all listings and revealed the last price
   useEffect(() => {
@@ -115,9 +123,7 @@ export default function GamePage() {
               <h1 className="text-2xl font-bold">{currentListing.title}</h1>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span>{currentListing.area} · {currentListing.size} · {currentListing.rooms}</span>
-                <span className="text-sm px-2 py-1 bg-muted rounded-full">
-                  Agent: {players.find(p => p.id === currentListing.agentId)?.name}
-                </span>
+                {/* Agent info can be updated to use real-time players if needed */}
               </div>
             </div>
 
@@ -201,7 +207,9 @@ export default function GamePage() {
 
         {/* Right Column - Bidding Controls */}
         <div className="col-span-3 min-w-[300px] overflow-auto">
-          <BiddingControls />
+          {gameId && playerId && (
+            <BiddingControls gameId={gameId} currentPlayerId={playerId} />
+          )}
         </div>
       </main>
 
