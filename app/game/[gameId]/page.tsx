@@ -269,7 +269,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                   }
                   return result;
                 }}
-                disabled={!!biddingEndTime && timer === 0}
+                disabled={biddingEndTime !== null && timer === 0}
               />
             </div>
           )}
