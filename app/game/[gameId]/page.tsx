@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Leaderboard } from "@/components/leaderboard";
 import { supabase } from "@/lib/supabaseClient";
-import { getCurrentListingIndex, incrementCurrentListingIndex, updatePlayerBalance, resetBiddingEndTime } from "@/lib/supabaseGame";
+import { getCurrentListingIndex, incrementCurrentListingIndex, updatePlayerBalance } from "@/lib/supabaseGame";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -75,7 +75,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
         ...listing,
         realPrice: listing.real_price
       })));
-      // Only update bidding end time, not the listing index
+      setCurrentListingIndex(game.current_listing_index ?? 0);
       setBiddingEndTime(game.bidding_end_time ? new Date(game.bidding_end_time) : null);
     }
     fetchGameState();
@@ -217,11 +217,8 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     setResultCountdown(10);
     setBiddingEndTime(null);
     setHasBid(false);
-    setTimer(8); // Set to 8 seconds for new property
+    // Timer will be set when first bid is placed
     balanceUpdatedRef.current = false; // Reset for next property
-    setRevealActive(false); // <-- Ensure overlay is hidden
-    setRevealStep(null);    // <-- Reset animation step
-    // Optionally reset any other relevant state here
   }, [currentListingIndex]);
 
   useEffect(() => {
@@ -462,9 +459,6 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                             className="w-full max-w-xs mx-auto"
                             onClick={async () => {
                               await incrementCurrentListingIndex(gameId);
-                              // Update the local state after incrementing the backend
-                              const newIndex = await getCurrentListingIndex(gameId);
-                              setCurrentListingIndex(newIndex);
                               setShowResult(false);
                             }}
                           >
@@ -513,10 +507,13 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                         try {
                           setHasBid(true);
                           const result = await submitBid(playerId, listingId, amount);
-                          // Only the host resets the timer in the backend
-                          if (typeof window !== "undefined" && localStorage.getItem("supabaseIsHost") === "1") {
-                            await resetBiddingEndTime(gameId, 8);
-                          }
+                          setBiddingEndTime(new Date(Date.now() + 8000));
+                          setTimer(8);
+                          const { data: bidData } = await supabase
+                            .from('bids')
+                            .select('*')
+                            .eq('game_id', gameId)
+                            .eq('listing_id', currentListing.id);
                           return result;
                         } catch (error) {
                           if (error instanceof Error) {

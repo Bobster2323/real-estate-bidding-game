@@ -194,13 +194,4 @@ export async function updatePlayerBalance(playerId: string, amount: number) {
     .update({ balance: amount })
     .eq('id', playerId);
   if (error) throw error;
-}
-
-// Reset the bidding_end_time in the games table for a given gameId
-export async function resetBiddingEndTime(gameId: string, seconds: number = 8) {
-  const newEndTime = new Date(Date.now() + seconds * 1000).toISOString();
-  await supabase
-    .from('games')
-    .update({ bidding_end_time: newEndTime })
-    .eq('id', gameId);
 } 
