@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RequireAuth } from "@/components/RequireAuth";
 import { SignOutButton } from "@/components/SignOutButton";
+import { useRouter } from "next/navigation";
 
 const LOGO_OPTIONS = [
   { label: "Tower", value: "tower" },
@@ -51,6 +52,7 @@ function CreateBankForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,6 +76,8 @@ function CreateBankForm() {
       const user = (await supabase.auth.getUser()).data.user;
       if (user) {
         await supabase.from("players").update({ investment_bank_id: data.id, investment_bank: data.name }).eq("user_id", user.id);
+        // Redirect to dashboard after successful creation
+        router.push("/bank/dashboard");
       }
     }
   };
@@ -124,6 +128,7 @@ function JoinBankList() {
   const [banks, setBanks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     setLoading(true);
@@ -140,8 +145,12 @@ function JoinBankList() {
     const user = (await supabase.auth.getUser()).data.user;
     if (user) {
       const { error } = await supabase.from("players").update({ investment_bank_id: bankId, investment_bank: bankName }).eq("user_id", user.id);
-      if (error) setError(error.message);
-      // Optionally, redirect or show success
+      if (error) {
+        setError(error.message);
+      } else {
+        // Redirect to dashboard after successful join
+        router.push("/bank/dashboard");
+      }
     }
     setLoading(false);
   };
