@@ -27,7 +27,75 @@ export default function BankDashboard() {
       setBank(bankData);
       // Get all investors in this bank
       const { data: investorList } = await supabase.from("players").select("*").eq("investment_bank_id", player.investment_bank_id);
-      setInvestors(investorList || []);
+      if (!investorList || investorList.length === 0) {
+        setInvestors([]);
+        setAllBanks([]);
+        setLoading(false);
+        return;
+      }
+      console.log('investorList', investorList);
+      const playerIds = investorList.map((inv: any) => inv.id);
+      let winningBids: any[] = [];
+      if (playerIds.length === 1) {
+        const { data } = await supabase
+          .from('bids')
+          .select('id, player_id, amount, won, listing_id')
+          .eq('won', true)
+          .eq('player_id', playerIds[0]);
+        winningBids = data || [];
+      } else if (playerIds.length > 1) {
+        const { data } = await supabase
+          .from('bids')
+          .select('id, player_id, amount, won, listing_id')
+          .eq('won', true)
+          .in('player_id', playerIds);
+        winningBids = data || [];
+      } else {
+        winningBids = [];
+      }
+      // Fetch listing prices in a second query
+      const listingIds = Array.from(new Set((winningBids || []).map((bid: any) => bid.listing_id)));
+      let listingPriceMap: Record<string, number> = {};
+      if (listingIds.length > 0) {
+        const { data: listingsData } = await supabase
+          .from('listings')
+          .select('id, real_price')
+          .in('id', listingIds);
+        for (const l of listingsData || []) {
+          listingPriceMap[l.id] = l.real_price;
+        }
+      }
+      // Attach real_price to each bid
+      winningBids = (winningBids || []).map((bid: any) => ({
+        ...bid,
+        real_price: listingPriceMap[bid.listing_id] || 0
+      }));
+      console.log('winningBids (with real_price)', winningBids);
+      // Aggregate stats per investor
+      const investorStats: Record<string, any> = {};
+      for (const inv of investorList) {
+        investorStats[inv.id] = {
+          ...inv,
+          invested_amount: 0,
+          returned_amount: 0,
+          net_profit: 0,
+          roi: 0,
+          deals: 0,
+        };
+      }
+      for (const bid of (winningBids || []) as any[]) {
+        const inv = investorStats[bid.player_id];
+        if (inv) {
+          inv.invested_amount += bid.amount || 0;
+          inv.returned_amount += bid.real_price || 0;
+          inv.deals += 1;
+        }
+      }
+      for (const inv of Object.values(investorStats)) {
+        (inv as any).net_profit = (inv as any).returned_amount - (inv as any).invested_amount;
+        (inv as any).roi = (inv as any).invested_amount > 0 ? (((inv as any).returned_amount - (inv as any).invested_amount) / (inv as any).invested_amount * 100).toFixed(1) : '0.0';
+      }
+      setInvestors(Object.values(investorStats));
       // Get all banks for rankings
       const { data: banksList } = await supabase.from("investment_bank").select("*");
       setAllBanks(banksList || []);
@@ -121,6 +189,8 @@ export default function BankDashboard() {
                   <tr className="border-b">
                     <th className="py-2 px-4 font-semibold">Investor</th>
                     <th className="py-2 px-4 font-semibold">Invested Amount</th>
+                    <th className="py-2 px-4 font-semibold">Returned Amount</th>
+                    <th className="py-2 px-4 font-semibold">Net Profit</th>
                     <th className="py-2 px-4 font-semibold">ROI</th>
                     <th className="py-2 px-4 font-semibold">Deals</th>
                   </tr>
@@ -130,7 +200,9 @@ export default function BankDashboard() {
                     <tr key={inv.id} className="border-b last:border-b-0">
                       <td className="py-2 px-4 font-medium">{inv.name}</td>
                       <td className="py-2 px-4">€{(inv.invested_amount || 0).toLocaleString()}</td>
-                      <td className="py-2 px-4 text-green-600">{inv.roi ? `${inv.roi}%` : "8.7%"}</td>
+                      <td className="py-2 px-4">€{(inv.returned_amount || 0).toLocaleString()}</td>
+                      <td className="py-2 px-4">€{(inv.net_profit || 0).toLocaleString()}</td>
+                      <td className="py-2 px-4 text-green-600">{inv.roi}%</td>
                       <td className="py-2 px-4">{inv.deals || 0}</td>
                     </tr>
                   ))}

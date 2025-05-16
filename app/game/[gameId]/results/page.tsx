@@ -77,15 +77,17 @@ export default function GameResultsPage() {
       const listing = listings.find(l => l.id === bid.listing_id);
       return sum + (listing?.real_price || 0);
     }, 0);
+    const netProfit = totalRealValue - totalSpent;
     const remainingBudget = typeof player.balance === "number" ? player.balance : 0;
     const roi = totalSpent > 0 ? ((totalRealValue - totalSpent) / totalSpent) * 100 : 0;
     return {
       ...player,
       propertiesAcquired,
       totalSpent,
+      totalRealValue,
+      netProfit,
       remainingBudget,
       roi,
-      totalRealValue,
       wonBids
     };
   });
@@ -145,8 +147,9 @@ export default function GameResultsPage() {
                 <th className="py-2 px-4 font-semibold">Rank</th>
                 <th className="py-2 px-4 font-semibold">Player</th>
                 <th className="py-2 px-4 font-semibold">Properties</th>
-                <th className="py-2 px-4 font-semibold">Total Spent</th>
-                <th className="py-2 px-4 font-semibold">Remaining Budget</th>
+                <th className="py-2 px-4 font-semibold">Amount Invested</th>
+                <th className="py-2 px-4 font-semibold">Amount Returned</th>
+                <th className="py-2 px-4 font-semibold">Net Profit</th>
                 <th className="py-2 px-4 font-semibold">ROI</th>
                 <th className="py-2 px-4 font-semibold">Status</th>
               </tr>
@@ -158,8 +161,9 @@ export default function GameResultsPage() {
                   <td className="py-2 px-4">{p.name}</td>
                   <td className="py-2 px-4">{p.propertiesAcquired}</td>
                   <td className="py-2 px-4">€{p.totalSpent.toLocaleString()}</td>
-                  <td className="py-2 px-4">€{p.remainingBudget.toLocaleString()}</td>
-                  <td className="py-2 px-4 {p.roi > 0 ? 'text-green-600' : p.roi < 0 ? 'text-red-600' : ''}">{p.roi.toFixed(1)}%</td>
+                  <td className="py-2 px-4">€{p.totalRealValue.toLocaleString()}</td>
+                  <td className="py-2 px-4">€{p.netProfit.toLocaleString()}</td>
+                  <td className="py-2 px-4">{p.totalSpent > 0 ? p.roi.toFixed(1) + '%' : '-'}</td>
                   <td className="py-2 px-4">
                     {i === 0 ? (
                       <span className="inline-block px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-bold">Winner</span>

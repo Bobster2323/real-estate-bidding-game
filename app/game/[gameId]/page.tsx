@@ -113,34 +113,42 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
 
   // When timer hits zero, show result overlay, update balance, and start countdown (host only)
   useEffect(() => {
-    if (timer === 0 && biddingEndTime && !showResult && hasBid) {
-      setResultCountdown(10); // Always reset to 10 when overlay is shown
-      if (mostRecentHighestBid && highestBidder && currentListing) {
-        const profit = currentListing.realPrice - mostRecentHighestBid.amount;
-        setResultInfo({
-          winner: highestBidder.name,
-          amount: mostRecentHighestBid.amount,
-          profit,
-          realPrice: currentListing.realPrice
-        });
-      } else {
-        setResultInfo(null);
-      }
-      setShowResult(true);
-      const isHost = typeof window !== "undefined" && localStorage.getItem("supabaseIsHost") === "1";
-      if (isHost && mostRecentHighestBid && highestBidder && currentListing) {
-        if (!balanceUpdatedRef.current) {
-          // Update winner's balance: add profit/loss
-          const winner = players.find(p => p.id === mostRecentHighestBid.player_id);
-          if (winner) {
-            const profit = currentListing.realPrice - mostRecentHighestBid.amount;
-            const newBalance = winner.balance + profit;
-            updatePlayerBalance(winner.id, newBalance);
+    async function handleResult() {
+      if (timer === 0 && biddingEndTime && !showResult && hasBid) {
+        setResultCountdown(10); // Always reset to 10 when overlay is shown
+        if (mostRecentHighestBid && highestBidder && currentListing) {
+          const profit = currentListing.realPrice - mostRecentHighestBid.amount;
+          setResultInfo({
+            winner: highestBidder.name,
+            amount: mostRecentHighestBid.amount,
+            profit,
+            realPrice: currentListing.realPrice
+          });
+        } else {
+          setResultInfo(null);
+        }
+        setShowResult(true);
+        const isHost = typeof window !== "undefined" && localStorage.getItem("supabaseIsHost") === "1";
+        if (isHost && mostRecentHighestBid && highestBidder && currentListing) {
+          if (!balanceUpdatedRef.current) {
+            // Mark the winning bid as won (AWAIT THIS!)
+            await supabase
+              .from('bids')
+              .update({ won: true })
+              .eq('id', mostRecentHighestBid.id);
+            // Update winner's balance: add profit/loss
+            const winner = players.find(p => p.id === mostRecentHighestBid.player_id);
+            if (winner) {
+              const profit = currentListing.realPrice - mostRecentHighestBid.amount;
+              const newBalance = winner.balance + profit;
+              updatePlayerBalance(winner.id, newBalance);
+            }
+            balanceUpdatedRef.current = true;
           }
-          balanceUpdatedRef.current = true;
         }
       }
     }
+    handleResult();
     // Cleanup timeout on unmount or round change
     return () => {
       if (resultTimeout) clearTimeout(resultTimeout);
@@ -155,13 +163,6 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
         setResultCountdown((prev) => prev - 0.05); // decrease smoothly
       }, 50);
       return () => clearInterval(interval);
-    } else if (showResult && resultCountdown <= 0 && !hasAdvancedRef.current) {
-      const isHost = typeof window !== "undefined" && localStorage.getItem("supabaseIsHost") === "1";
-      if (isHost) {
-        incrementCurrentListingIndex(gameId);
-      }
-      hasAdvancedRef.current = true;
-      setShowResult(false);
     }
   }, [showResult, resultCountdown, gameId]);
 
@@ -368,6 +369,18 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                         <span className="block text-xs text-gray-400 mb-1">Next property</span>
                         <Progress value={Math.max(0, resultCountdown) * 100 / 10} className="h-4 md:h-5 rounded-full bg-gray-700 [&_.bg-primary]:bg-green-500/80 shadow-inner" />
                       </div>
+                      {/* Host-only Next Property button */}
+                      {typeof window !== "undefined" && localStorage.getItem("supabaseIsHost") === "1" && (
+                        <Button
+                          className="mt-6"
+                          onClick={async () => {
+                            await incrementCurrentListingIndex(gameId);
+                            setShowResult(false);
+                          }}
+                        >
+                          Next Property
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <>
