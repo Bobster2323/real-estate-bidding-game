@@ -8,6 +8,7 @@ import { joinGame, fetchRandomListings, setGameListings, setPlayerReady } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/lib/supabaseClient";
+import { RequireAuth } from "@/components/RequireAuth";
 
 export default function LobbyPage({ params }: { params: Promise<{ gameId: string }> }) {
   const { gameId } = use(params);
@@ -104,71 +105,73 @@ export default function LobbyPage({ params }: { params: Promise<{ gameId: string
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-8">
-      <div className="w-full max-w-lg bg-card rounded-lg shadow-lg p-8 space-y-8">
-        <h1 className="text-3xl font-bold text-center">Game Lobby</h1>
-        {(!isJoiningPlayer && !hostAdded) ? (
-          <div className="space-y-4">
+    <RequireAuth>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-8">
+        <div className="w-full max-w-lg bg-card rounded-lg shadow-lg p-8 space-y-8">
+          <h1 className="text-3xl font-bold text-center">Game Lobby</h1>
+          {(!isJoiningPlayer && !hostAdded) ? (
+            <div className="space-y-4">
+              <Input
+                placeholder="Enter your name (host)"
+                value={hostName}
+                onChange={e => setHostName(e.target.value)}
+              />
+              {error && <p className="text-destructive text-sm">{error}</p>}
+              <Button className="w-full" onClick={handleAddHost}>
+                Join as Host
+              </Button>
+            </div>
+          ) : null}
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold">Players in Lobby</h2>
+            <ul className="bg-muted rounded-lg p-4 min-h-[40px] flex flex-col gap-2">
+              {players.length === 0 && <li className="text-muted-foreground">No players yet</li>}
+              {players.map(player => (
+                <li key={player.id} className="py-2 px-4 bg-white rounded shadow flex items-center gap-3 border border-gray-200">
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600">
+                    {player.name.slice(0,2).toUpperCase()}
+                  </div>
+                  <span className="text-lg font-medium">{player.name}</span>
+                  {player.ready && <span className="ml-2 text-green-600 font-bold">Ready</span>}
+                  {player.id === currentPlayerId && !player.ready && (
+                    <Button size="sm" className="ml-2" onClick={() => setPlayerReady(player.id, true)}>Ready Up</Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="space-y-2">
+            <label className="block font-medium">Invite Link</label>
+            <div className="flex gap-2">
+              <Input value={inviteUrl} readOnly className="flex-1" />
+              <Button onClick={handleCopyLink} className="w-32">
+                {copied ? "Copied!" : "Copy Link"}
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="block font-medium">Number of Rounds</label>
             <Input
-              placeholder="Enter your name (host)"
-              value={hostName}
-              onChange={e => setHostName(e.target.value)}
+              type="number"
+              min={1}
+              value={rounds}
+              onChange={e => setRounds(Number(e.target.value))}
+              disabled={players.some(p => p.ready)}
             />
-            {error && <p className="text-destructive text-sm">{error}</p>}
-            <Button className="w-full" onClick={handleAddHost}>
-              Join as Host
-            </Button>
           </div>
-        ) : null}
-        <div className="space-y-2">
-          <h2 className="text-xl font-semibold">Players in Lobby</h2>
-          <ul className="bg-muted rounded-lg p-4 min-h-[40px] flex flex-col gap-2">
-            {players.length === 0 && <li className="text-muted-foreground">No players yet</li>}
-            {players.map(player => (
-              <li key={player.id} className="py-2 px-4 bg-white rounded shadow flex items-center gap-3 border border-gray-200">
-                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600">
-                  {player.name.slice(0,2).toUpperCase()}
-                </div>
-                <span className="text-lg font-medium">{player.name}</span>
-                {player.ready && <span className="ml-2 text-green-600 font-bold">Ready</span>}
-                {player.id === currentPlayerId && !player.ready && (
-                  <Button size="sm" className="ml-2" onClick={() => setPlayerReady(player.id, true)}>Ready Up</Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="space-y-2">
-          <label className="block font-medium">Invite Link</label>
-          <div className="flex gap-2">
-            <Input value={inviteUrl} readOnly className="flex-1" />
-            <Button onClick={handleCopyLink} className="w-32">
-              {copied ? "Copied!" : "Copy Link"}
-            </Button>
+          <div className="space-y-2">
+            <label className="block font-medium">Starting Budget (€)</label>
+            <Input
+              type="number"
+              min={1000}
+              step={1000}
+              value={budget}
+              onChange={e => setBudget(Number(e.target.value))}
+              disabled={players.some(p => p.ready)}
+            />
           </div>
-        </div>
-        <div className="space-y-2">
-          <label className="block font-medium">Number of Rounds</label>
-          <Input
-            type="number"
-            min={1}
-            value={rounds}
-            onChange={e => setRounds(Number(e.target.value))}
-            disabled={players.some(p => p.ready)}
-          />
-        </div>
-        <div className="space-y-2">
-          <label className="block font-medium">Starting Budget (€)</label>
-          <Input
-            type="number"
-            min={1000}
-            step={1000}
-            value={budget}
-            onChange={e => setBudget(Number(e.target.value))}
-            disabled={players.some(p => p.ready)}
-          />
         </div>
       </div>
-    </div>
+    </RequireAuth>
   );
 } 

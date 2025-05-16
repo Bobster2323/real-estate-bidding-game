@@ -12,6 +12,9 @@ import { FinalScore } from "@/components/final-score"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { useGameSession } from "@/context/game-session-context"
+import { RequireAuth } from "@/components/RequireAuth"
+import { useRealtimeGame } from "@/hooks/useRealtimeGame"
+import { supabase } from "@/lib/supabaseClient"
 
 export default function GamePage() {
   const { currentListing, showPrice, nextListing, previousListing, currentListingIndex, listings } = useListings()
@@ -20,6 +23,10 @@ export default function GamePage() {
   const { currentSession } = useGameSession()
   const gameId = currentSession?.id
   const [playerId, setPlayerId] = useState<string | null>(null)
+  const { players, bids, getPlayerBid, submitBid } = useRealtimeGame(gameId || "")
+  const [biddingEndTime, setBiddingEndTime] = useState<Date | null>(null)
+  const [timer, setTimer] = useState(0)
+  const [hasBid, setHasBid] = useState(false)
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -71,153 +78,176 @@ export default function GamePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="w-full px-6 flex h-14 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-lg">
-            <Home className="w-5 h-5" />
-            <span className="font-medium">Home</span>
-          </Link>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
-              Property
-            </span>
-            <div className="flex items-center">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={previousListing}
-                disabled={currentListingIndex <= 0}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="w-12 text-center font-medium">
-                {currentListingIndex + 1}/{listings.length}
+    <RequireAuth>
+      <div className="min-h-screen bg-background flex flex-col">
+        {/* Header */}
+        <header className="w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="w-full px-6 flex h-14 items-center justify-between">
+            <Link href="/" className="flex items-center gap-2 text-lg">
+              <Home className="w-5 h-5" />
+              <span className="font-medium">Home</span>
+            </Link>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                Property
               </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={nextListing}
-                disabled={currentListingIndex >= listings.length - 1}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1 w-full px-6 py-4 grid grid-cols-12 gap-6 h-[calc(100vh-3.5rem)]">
-        {/* Left Column - Leaderboard */}
-        <div className="col-span-3 min-w-[300px] overflow-auto">
-          <Leaderboard />
-        </div>
-
-        {/* Middle Column - Property Details */}
-        <div className="col-span-6 min-w-[500px] overflow-auto">
-          <div className="space-y-4">
-            {/* Property Title and Agent */}
-            <div>
-              <h1 className="text-2xl font-bold">{currentListing.title}</h1>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span>{currentListing.area} · {currentListing.size} · {currentListing.rooms}</span>
-                {/* Agent info can be updated to use real-time players if needed */}
+              <div className="flex items-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={previousListing}
+                  disabled={currentListingIndex <= 0}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="w-12 text-center font-medium">
+                  {currentListingIndex + 1}/{listings.length}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={nextListing}
+                  disabled={currentListingIndex >= listings.length - 1}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
             </div>
+          </div>
+        </header>
 
-            {/* Main Image */}
-            <div className="relative aspect-[16/10] overflow-hidden rounded-xl border bg-muted">
-              {currentListing.images.length > 0 ? (
-                <>
-                  <Image
-                    src={currentListing.images[currentImageIndex] || "/placeholder.svg"}
-                    alt={currentListing.title}
-                    fill
-                    className="object-cover"
-                  />
-                  {currentListing.images.length > 1 && (
-                    <>
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="absolute left-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full opacity-90"
-                        onClick={prevImage}
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="absolute right-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full opacity-90"
-                        onClick={nextImage}
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </>
-                  )}
-                </>
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <ImageIcon className="h-8 w-8 text-muted-foreground" />
+        {/* Main Content */}
+        <main className="flex-1 w-full px-6 py-4 grid grid-cols-12 gap-6 h-[calc(100vh-3.5rem)]">
+          {/* Left Column - Leaderboard */}
+          <div className="col-span-3 min-w-[300px] overflow-auto">
+            <Leaderboard />
+          </div>
+
+          {/* Middle Column - Property Details */}
+          <div className="col-span-6 min-w-[500px] overflow-auto">
+            <div className="space-y-4">
+              {/* Property Title and Agent */}
+              <div>
+                <h1 className="text-2xl font-bold">{currentListing.title}</h1>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <span>{currentListing.area} · {currentListing.size} · {currentListing.rooms}</span>
+                  {/* Agent info can be updated to use real-time players if needed */}
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* Thumbnails */}
-            {currentListing.images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto">
-                {currentListing.images.map((image, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentImageIndex(index)}
-                    className={`relative h-16 w-24 flex-shrink-0 rounded-md overflow-hidden border-2 transition-all ${
-                      index === currentImageIndex ? "border-primary" : "border-transparent"
-                    }`}
-                  >
+              {/* Main Image */}
+              <div className="relative aspect-[16/10] overflow-hidden rounded-xl border bg-muted">
+                {currentListing.images.length > 0 ? (
+                  <>
                     <Image
-                      src={image || "/placeholder.svg"}
-                      alt={`Thumbnail ${index + 1}`}
+                      src={currentListing.images[currentImageIndex] || "/placeholder.svg"}
+                      alt={currentListing.title}
                       fill
                       className="object-cover"
                     />
-                  </button>
-                ))}
+                    {currentListing.images.length > 1 && (
+                      <>
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          className="absolute left-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full opacity-90"
+                          onClick={prevImage}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          className="absolute right-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full opacity-90"
+                          onClick={nextImage}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                )}
               </div>
-            )}
 
-            {/* Property Details */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="rounded-lg border p-4">
-                <div className="text-sm font-medium text-muted-foreground mb-1">Area</div>
-                <div className="text-lg font-medium">{currentListing.area}</div>
-              </div>
-              <div className="rounded-lg border p-4">
-                <div className="text-sm font-medium text-muted-foreground mb-1">Size</div>
-                <div className="text-lg font-medium">{currentListing.size}</div>
-              </div>
-              <div className="rounded-lg border p-4">
-                <div className="text-sm font-medium text-muted-foreground mb-1">Rooms</div>
-                <div className="text-lg font-medium">{currentListing.rooms}</div>
+              {/* Thumbnails */}
+              {currentListing.images.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto">
+                  {currentListing.images.map((image, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentImageIndex(index)}
+                      className={`relative h-16 w-24 flex-shrink-0 rounded-md overflow-hidden border-2 transition-all ${
+                        index === currentImageIndex ? "border-primary" : "border-transparent"
+                      }`}
+                    >
+                      <Image
+                        src={image || "/placeholder.svg"}
+                        alt={`Thumbnail ${index + 1}`}
+                        fill
+                        className="object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Property Details */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="rounded-lg border p-4">
+                  <div className="text-sm font-medium text-muted-foreground mb-1">Area</div>
+                  <div className="text-lg font-medium">{currentListing.area}</div>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <div className="text-sm font-medium text-muted-foreground mb-1">Size</div>
+                  <div className="text-lg font-medium">{currentListing.size}</div>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <div className="text-sm font-medium text-muted-foreground mb-1">Rooms</div>
+                  <div className="text-lg font-medium">{currentListing.rooms}</div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Right Column - Bidding Controls */}
-        <div className="col-span-3 min-w-[300px] overflow-auto">
-          {gameId && playerId && (
-            <BiddingControls gameId={gameId} currentPlayerId={playerId} />
-          )}
-        </div>
-      </main>
+          {/* Right Column - Bidding Controls */}
+          <div className="col-span-3 min-w-[300px] overflow-auto">
+            {gameId && playerId && currentListing && (
+              <BiddingControls
+                gameId={gameId}
+                currentPlayerId={playerId}
+                listingId={currentListing.id}
+                bids={bids}
+                getPlayerBid={getPlayerBid}
+                submitBid={async (...args) => {
+                  setHasBid(true)
+                  const result = await submitBid(...args)
+                  // Fetch updated bidding_end_time from Supabase
+                  const { data: game } = await supabase
+                    .from('games')
+                    .select('bidding_end_time')
+                    .eq('id', gameId)
+                    .single()
+                  if (game?.bidding_end_time) {
+                    setBiddingEndTime(new Date(game.bidding_end_time))
+                  }
+                  return result
+                }}
+                disabled={biddingEndTime !== null && timer === 0}
+              />
+            )}
+          </div>
+        </main>
 
-      {/* Final Score Overlay */}
-      <AnimatePresence>
-        {showFinalScore && <FinalScore />}
-      </AnimatePresence>
-    </div>
+        {/* Final Score Overlay */}
+        <AnimatePresence>
+          {showFinalScore && <FinalScore />}
+        </AnimatePresence>
+      </div>
+    </RequireAuth>
   )
 }
 

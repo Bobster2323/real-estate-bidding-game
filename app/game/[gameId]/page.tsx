@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useRef } from "react";
 import { useRealtimeGame } from "@/hooks/useRealtimeGame";
 import { BiddingControls } from "@/components/bidding-controls";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,9 @@ import Link from "next/link";
 import { Leaderboard } from "@/components/leaderboard";
 import { supabase } from "@/lib/supabaseClient";
 import { getCurrentListingIndex, incrementCurrentListingIndex, updatePlayerBalance } from "@/lib/supabaseGame";
+import { Progress } from "@/components/ui/progress";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function GamePage({ params }: { params: Promise<{ gameId: string }> }) {
   const { gameId } = use(params);
@@ -25,6 +28,10 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   const [resultTimeout, setResultTimeout] = useState<NodeJS.Timeout | null>(null);
   const [resultCountdown, setResultCountdown] = useState(10);
   const [hasBid, setHasBid] = useState(false);
+  const [animatedBid, setAnimatedBid] = useState(0);
+  const prevBidRef = useRef(0);
+  const thumbnailContainerRef = useRef<HTMLDivElement>(null);
+  const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Listing and bid calculations (must be above useEffect hooks)
   const currentListing = listings.length > 0 ? listings[currentListingIndex] : null;
@@ -73,11 +80,11 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     }
     const updateTimer = () => {
       const now = Date.now();
-      const diff = Math.max(0, Math.floor((biddingEndTime.getTime() - now) / 1000));
+      const diff = Math.max(0, (biddingEndTime.getTime() - now) / 1000); // use float seconds
       setTimer(diff);
     };
     updateTimer();
-    const interval = setInterval(updateTimer, 250);
+    const interval = setInterval(updateTimer, 50); // update every 50ms for smoothness
     return () => clearInterval(interval);
   }, [biddingEndTime, currentListingIndex]);
 
@@ -110,10 +117,10 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   useEffect(() => {
     if (showResult && resultCountdown > 0) {
       const interval = setInterval(() => {
-        setResultCountdown((prev) => prev - 1);
-      }, 1000);
+        setResultCountdown((prev) => prev - 0.05); // decrease smoothly
+      }, 50);
       return () => clearInterval(interval);
-    } else if (showResult && resultCountdown === 0) {
+    } else if (showResult && resultCountdown <= 0) {
       const isHost = typeof window !== "undefined" && localStorage.getItem("supabaseIsHost") === "1";
       if (isHost) {
         incrementCurrentListingIndex(gameId);
@@ -135,8 +142,41 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     setResultCountdown(10);
     setBiddingEndTime(null);
     setHasBid(false);
-    setTimer(5);
+    setTimer(8); // Set to 8 seconds for new property
   }, [currentListingIndex]);
+
+  useEffect(() => {
+    if (highestBid !== prevBidRef.current) {
+      const start = prevBidRef.current;
+      const end = highestBid;
+      const duration = 600; // ms
+      const startTime = performance.now();
+      function animate(now: number) {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const value = Math.floor(start + (end - start) * progress);
+        setAnimatedBid(value);
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          setAnimatedBid(end);
+        }
+      }
+      requestAnimationFrame(animate);
+      prevBidRef.current = highestBid;
+    }
+  }, [highestBid]);
+
+  useEffect(() => {
+    if (thumbnailContainerRef.current && thumbnailRefs.current[currentImageIndex]) {
+      const container = thumbnailContainerRef.current;
+      const button = thumbnailRefs.current[currentImageIndex];
+      const containerRect = container.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      const offset = buttonRect.left - containerRect.left - containerRect.width / 2 + buttonRect.width / 2;
+      container.scrollBy({ left: offset, behavior: 'smooth' });
+    }
+  }, [currentImageIndex]);
 
   if (!currentListing) {
     return (
@@ -159,12 +199,12 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-950 flex flex-col dark">
       {/* Header */}
-      <header className="w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="w-full px-6 flex h-14 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-lg">
-            <span className="font-medium">Home</span>
+      <header className="w-full border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="w-full px-6 flex h-16 items-center justify-between">
+          <Link href="/" className="flex items-center gap-2 text-lg font-semibold text-primary">
+            <span className="font-bold tracking-tight">Home</span>
           </Link>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Property</span>
@@ -174,127 +214,166 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
           </div>
         </div>
       </header>
-
       {/* Main Content */}
-      <main className="flex-1 w-full px-6 py-4 grid grid-cols-12 gap-6 h-[calc(100vh-3.5rem)]">
-        {/* Left Column - Leaderboard */}
-        <div className="col-span-3 min-w-[300px] overflow-auto">
-          <Leaderboard players={players} />
-        </div>
-
-        {/* Middle Column - Property Details and Current Bid */}
-        <div className="col-span-6 min-w-[500px] overflow-auto flex flex-col items-center">
-          <div className="space-y-4 w-full max-w-2xl mx-auto">
-            {/* Property Title and Details */}
-            <div>
-              <h1 className="text-2xl font-bold text-center">{currentListing.title}</h1>
-              <div className="flex items-center gap-2 text-muted-foreground justify-center">
-                <span>{currentListing.area} · {currentListing.size} · {currentListing.rooms}</span>
-              </div>
-            </div>
-            {/* Main Image */}
-            <div className="w-full flex justify-center">
-              <img
-                src={currentListing.images[currentImageIndex] || "/placeholder.svg"}
-                alt={currentListing.title}
-                className="object-cover rounded-lg max-h-96 w-full max-w-xl bg-gray-100"
-              />
-            </div>
-            {/* Image Thumbnails */}
-            {currentListing.images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto justify-center">
-                {currentListing.images.map((image: string, index: number) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentImageIndex(index)}
-                    className={`relative h-16 w-24 flex-shrink-0 rounded-md overflow-hidden border-2 transition-all ${
-                      index === currentImageIndex ? "border-primary" : "border-transparent"
-                    }`}
-                  >
-                    <img
-                      src={image || "/placeholder.svg"}
-                      alt={`Thumbnail ${index + 1}`}
-                      className="object-cover w-full h-full"
+      <main className="flex-1 w-full flex flex-col items-center justify-center px-2 py-6">
+        <div className="w-full max-w-7xl flex flex-col items-center gap-10">
+          <div className="w-full flex flex-col md:flex-row items-center justify-center gap-10">
+            {/* Leaderboard */}
+            <Card className="w-full max-w-xs shadow-2xl rounded-3xl border-0 bg-card/80 backdrop-blur-lg p-0 flex-shrink-0">
+              <CardContent className="p-0">
+                <Leaderboard players={players} />
+              </CardContent>
+            </Card>
+            {/* Main Property Card */}
+            <Card className="w-full max-w-2xl shadow-2xl rounded-3xl border-0 bg-card/90 backdrop-blur-lg flex flex-col items-center">
+              <CardContent className="space-y-6 w-full flex flex-col items-center">
+                {/* Property Title and Details */}
+                <div className="pt-2 w-full text-center">
+                  <h1 className="text-4xl font-extrabold text-primary mb-1 leading-tight">{currentListing.title}</h1>
+                  <div className="text-lg text-muted-foreground mb-2">{currentListing.area} · {currentListing.size} · {currentListing.rooms}</div>
+                </div>
+                {/* Unified Image Gallery Card: main image and thumbnails inside the same card, no overflow */}
+                <Card className="w-full max-w-xl mx-auto shadow-2xl rounded-2xl border-0 bg-card/90 backdrop-blur-lg flex flex-col items-center overflow-hidden p-0">
+                  <div className="relative w-full flex items-center justify-center bg-transparent" style={{ minHeight: '24rem' }}>
+                    {currentListing.images.length > 1 && (
+                      <button
+                        onClick={() => setCurrentImageIndex((prev) => (prev - 1 + currentListing.images.length) % currentListing.images.length)}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/70 text-white rounded-full p-2 shadow-lg backdrop-blur z-10 transition"
+                        style={{ outline: 'none' }}
+                        aria-label="Previous image"
+                      >
+                        <ChevronLeft className="w-6 h-6" />
+                      </button>
+                    )}
+                    <div className="flex-1 flex justify-center items-center">
+                      <img
+                        src={currentListing.images[currentImageIndex] || "/placeholder.svg"}
+                        alt={currentListing.title}
+                        className="object-cover rounded-2xl max-h-96 w-full max-w-xl bg-gray-900/60 shadow-lg border border-border transition-all duration-300"
+                      />
+                    </div>
+                    {currentListing.images.length > 1 && (
+                      <button
+                        onClick={() => setCurrentImageIndex((prev) => (prev + 1) % currentListing.images.length)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/70 text-white rounded-full p-2 shadow-lg backdrop-blur z-10 transition"
+                        style={{ outline: 'none' }}
+                        aria-label="Next image"
+                      >
+                        <ChevronRight className="w-6 h-6" />
+                      </button>
+                    )}
+                  </div>
+                  {currentListing.images.length > 1 && (
+                    <div
+                      ref={thumbnailContainerRef}
+                      className="w-full pl-2 pr-2 pb-2 overflow-x-auto scrollbar-hide flex gap-3 justify-center mt-2 bg-transparent scroll-px-2"
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    >
+                      {currentListing.images.map((image: string, index: number) => (
+                        <button
+                          key={index}
+                          ref={el => { thumbnailRefs.current[index] = el; }}
+                          onClick={() => setCurrentImageIndex(index)}
+                          className={`relative h-16 w-24 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all duration-200 shadow-sm
+                            ${index === currentImageIndex
+                              ? "border-primary ring-2 ring-primary scale-105 shadow-lg z-10"
+                              : "border-border hover:border-primary/50 opacity-80"}
+                          `}
+                          style={{ outline: 'none' }}
+                        >
+                          <img
+                            src={image || "/placeholder.svg"}
+                            alt={`Thumbnail ${index + 1}`}
+                            className="object-cover w-full h-full"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              </CardContent>
+            </Card>
+            {/* Right Column: Current Highest Bid above Bidding Controls */}
+            <div className="w-full max-w-xs flex flex-col gap-8 flex-shrink-0">
+              {/* Current Highest Bid Card */}
+              <Card className="w-full shadow-2xl rounded-3xl border-0 bg-gradient-to-br from-gray-800/90 via-gray-900/90 to-gray-800/90 backdrop-blur-xl ring-2 ring-primary/20 mx-auto min-h-[240px] max-h-[320px] flex justify-center">
+                <CardContent className="px-4 md:px-10 py-8 md:py-10 text-center flex flex-col items-center w-full h-full justify-center">
+                  {timer === 0 && biddingEndTime && hasBid && showResult ? (
+                    <>
+                      {mostRecentHighestBid && highestBidder ? (
+                        <>
+                          <span className="block text-2xl md:text-3xl font-bold text-green-400 mb-2 mt-4 md:mt-8 drop-shadow">Property Sold!</span>
+                          <span className="block text-lg md:text-xl text-gray-100 mb-2">{highestBidder.name} bought this property for <span className="font-bold">€{mostRecentHighestBid.amount.toLocaleString()}</span>!</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="block text-2xl md:text-3xl font-bold text-red-400 mb-2 mt-4 md:mt-8 drop-shadow">No Bids!</span>
+                          <span className="block text-lg md:text-xl text-gray-100 mb-2">No one bought this property.</span>
+                        </>
+                      )}
+                      <div className="w-full mt-4 md:mt-6">
+                        <span className="block text-xs text-gray-400 mb-1">Next property</span>
+                        <Progress value={Math.max(0, resultCountdown) * 100 / 10} className="h-4 md:h-5 rounded-full bg-gray-700 [&_.bg-primary]:bg-green-500/80 shadow-inner" />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span className="block text-lg md:text-xl font-bold text-primary mb-2 tracking-wide mt-2 md:mt-4">Current Highest Bid</span>
+                      <span className="block text-4xl md:text-5xl font-extrabold text-primary drop-shadow-lg mb-2">
+                        €{animatedBid.toLocaleString()}
+                      </span>
+                      {highestBidder && (
+                        <div className="flex items-center justify-center gap-2 mt-2 text-base md:text-lg text-primary font-medium">
+                          by {highestBidder.name}
+                        </div>
+                      )}
+                      {/* Bidding Timer as Progress Bar */}
+                      {biddingEndTime && timer > 0 && (
+                        <div className="w-full mt-4 md:mt-6">
+                          <span className="block text-xs text-gray-400 mb-1">Time left to bid</span>
+                          <Progress value={timer * 100 / 8} className="h-4 md:h-5 rounded-full bg-gray-700 [&_.bg-primary]:bg-red-500/80 shadow-inner" />
+                        </div>
+                      )}
+                      {biddingEndTime && timer === 0 && hasBid && (
+                        <div className="mt-4 text-base md:text-lg font-bold text-red-400">Sold!</div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+              {/* Bidding Controls Card */}
+              {gameId && playerId && currentListing && (
+                <Card className="w-full shadow-2xl rounded-3xl border-0 bg-card/80 backdrop-blur-lg flex-shrink-0">
+                  <CardContent>
+                    <BiddingControls
+                      gameId={gameId}
+                      currentPlayerId={playerId}
+                      listingId={currentListing.id}
+                      bids={bids}
+                      getPlayerBid={getPlayerBid}
+                      submitBid={async (...args) => {
+                        setHasBid(true);
+                        const result = await submitBid(...args);
+                        // Fetch updated bidding_end_time from Supabase
+                        const { data: game } = await supabase
+                          .from('games')
+                          .select('bidding_end_time')
+                          .eq('id', gameId)
+                          .single();
+                        if (game?.bidding_end_time) {
+                          setBiddingEndTime(new Date(game.bidding_end_time));
+                        }
+                        return result;
+                      }}
+                      disabled={biddingEndTime !== null && timer === 0}
                     />
-                  </button>
-                ))}
-              </div>
-            )}
-            {/* Current Bid Display */}
-            <div className="w-full flex justify-center my-4">
-              <div className="bg-primary/10 border border-primary rounded-lg px-8 py-4 text-center">
-                <span className="text-lg font-semibold text-primary">Current Highest Bid: </span>
-                <span className="text-2xl font-bold text-primary">€{highestBid.toLocaleString()}</span>
-                {highestBidder && (
-                  <div className="mt-2 text-base text-primary font-medium">
-                    by {highestBidder.name}
-                  </div>
-                )}
-                {/* Bidding Timer */}
-                {biddingEndTime && (
-                  <div className="mt-2 text-lg font-bold text-red-600">
-                    {timer > 0
-                      ? `Time left: ${timer}s`
-                      : hasBid
-                        ? "Sold!"
-                        : null}
-                  </div>
-                )}
-              </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
-        </div>
-
-        {/* Right Column - Bidding Controls */}
-        <div className="col-span-3 min-w-[300px] overflow-auto flex flex-col items-center">
-          {gameId && playerId && currentListing && (
-            <div className="w-full max-w-xs mt-8">
-              <BiddingControls
-                gameId={gameId}
-                currentPlayerId={playerId}
-                listingId={currentListing.id}
-                bids={bids}
-                getPlayerBid={getPlayerBid}
-                submitBid={async (...args) => {
-                  setHasBid(true);
-                  const result = await submitBid(...args);
-                  // Fetch updated bidding_end_time from Supabase
-                  const { data: game } = await supabase
-                    .from('games')
-                    .select('bidding_end_time')
-                    .eq('id', gameId)
-                    .single();
-                  if (game?.bidding_end_time) {
-                    setBiddingEndTime(new Date(game.bidding_end_time));
-                  }
-                  return result;
-                }}
-                disabled={biddingEndTime !== null && timer === 0}
-              />
-            </div>
-          )}
         </div>
       </main>
-
-      {/* Result Overlay */}
-      {timer === 0 && biddingEndTime && hasBid && showResult && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white rounded-lg p-8 shadow-lg">
-            {mostRecentHighestBid && highestBidder ? (
-              <>
-                <h2 className="text-3xl font-bold mb-4">Property Sold!</h2>
-                <p className="text-xl mb-2">{highestBidder.name} bought this property for €{mostRecentHighestBid.amount.toLocaleString()}!</p>
-              </>
-            ) : (
-              <>
-                <h2 className="text-3xl font-bold mb-4">No Bids!</h2>
-                <p className="text-xl mb-2">No one bought this property.</p>
-              </>
-            )}
-            <p className="text-lg mt-4">Next property in {resultCountdown} seconds...</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

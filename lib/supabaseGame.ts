@@ -35,8 +35,8 @@ export async function placeBid(gameId: string, playerId: string, listingId: stri
     .select()
     .single();
   if (error) throw error;
-  // Set bidding_end_time to now + 5 seconds
-  const endTime = new Date(Date.now() + 5000).toISOString();
+  // Set bidding_end_time to now + 8 seconds
+  const endTime = new Date(Date.now() + 8000).toISOString();
   await supabase
     .from('games')
     .update({ bidding_end_time: endTime })
