@@ -66,6 +66,18 @@ export default function LobbyPage({ params }: { params: Promise<{ gameId: string
     }
   }, [players, gameId, rounds, router]);
 
+  // Always assign the first player as host in the lobby
+  useEffect(() => {
+    if (players.length > 0 && typeof window !== "undefined") {
+      const currentId = localStorage.getItem("supabasePlayerId");
+      if (players[0].id === currentId) {
+        localStorage.setItem("supabaseIsHost", "1");
+      } else {
+        localStorage.removeItem("supabaseIsHost");
+      }
+    }
+  }, [players]);
+
   // Add host as player if not already added
   const handleAddHost = async () => {
     if (!hostName.trim()) {
@@ -145,20 +157,6 @@ export default function LobbyPage({ params }: { params: Promise<{ gameId: string
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#18181b] p-8">
         <div className="w-full max-w-4xl bg-[#23272f] rounded-2xl shadow-2xl p-10 space-y-8 border border-[#23272f]">
           <h1 className="text-3xl font-extrabold text-white text-center mb-2">Game Lobby</h1>
-          {(!isJoiningPlayer && !hostAdded) ? (
-            <div className="space-y-4">
-              <Input
-                placeholder="Enter your name (host)"
-                value={hostName}
-                onChange={e => setHostName(e.target.value)}
-                className="bg-[#18181b] text-white border border-gray-700 placeholder:text-gray-400 rounded-lg"
-              />
-              {error && <p className="text-red-500 text-sm">{error}</p>}
-              <Button className="w-full bg-gradient-to-r from-green-400 via-green-500 to-green-600 hover:from-green-500 hover:to-green-700 text-white font-bold rounded-lg shadow-lg" onClick={handleAddHost}>
-                Join as Host
-              </Button>
-            </div>
-          ) : null}
           <div className="space-y-2">
             <h2 className="text-xl font-bold text-white">Players in Lobby</h2>
             <div className="bg-[#23272f] rounded-xl p-4 border border-gray-700 overflow-x-auto">
