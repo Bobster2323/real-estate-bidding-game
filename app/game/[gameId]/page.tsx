@@ -38,6 +38,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   const [revealStep, setRevealStep] = useState<number | null>(null);
   const [revealActive, setRevealActive] = useState(false);
   const [lastRevealedIndex, setLastRevealedIndex] = useState<number | null>(null);
+  const [biddingDisabled, setBiddingDisabled] = useState(false);
 
   // Listing and bid calculations (must be above useEffect hooks)
   const currentListing = listings.length > 0 ? listings[currentListingIndex] : null;
@@ -257,6 +258,13 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   // When property changes, reset lastRevealedIndex if needed
   useEffect(() => {
     setLastRevealedIndex(null);
+  }, [currentListingIndex]);
+
+  // When property changes, disable bidding for 5 seconds
+  useEffect(() => {
+    setBiddingDisabled(true);
+    const timeout = setTimeout(() => setBiddingDisabled(false), 5000);
+    return () => clearTimeout(timeout);
   }, [currentListingIndex]);
 
   if (!currentListing) {
@@ -507,13 +515,15 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                         try {
                           setHasBid(true);
                           const result = await submitBid(playerId, listingId, amount);
-                          setBiddingEndTime(new Date(Date.now() + 8000));
-                          setTimer(8);
-                          const { data: bidData } = await supabase
-                            .from('bids')
-                            .select('*')
-                            .eq('game_id', gameId)
-                            .eq('listing_id', currentListing.id);
+                          // Fetch updated bidding_end_time from Supabase after bid
+                          const { data: game } = await supabase
+                            .from('games')
+                            .select('bidding_end_time')
+                            .eq('id', gameId)
+                            .single();
+                          if (game?.bidding_end_time) {
+                            setBiddingEndTime(new Date(game.bidding_end_time));
+                          }
                           return result;
                         } catch (error) {
                           if (error instanceof Error) {
@@ -524,7 +534,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                           return null;
                         }
                       }}
-                      disabled={biddingEndTime !== null && timer === 0}
+                      disabled={biddingDisabled || (biddingEndTime !== null && timer === 0)}
                     />
                   </CardContent>
                 </Card>
