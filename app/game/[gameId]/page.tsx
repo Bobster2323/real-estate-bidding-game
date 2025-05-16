@@ -219,6 +219,9 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     setHasBid(false);
     setTimer(8); // Set to 8 seconds for new property
     balanceUpdatedRef.current = false; // Reset for next property
+    setRevealActive(false); // <-- Ensure overlay is hidden
+    setRevealStep(null);    // <-- Reset animation step
+    // Optionally reset any other relevant state here
   }, [currentListingIndex]);
 
   useEffect(() => {
