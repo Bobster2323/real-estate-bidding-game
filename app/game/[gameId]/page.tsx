@@ -513,7 +513,6 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                         try {
                           setHasBid(true);
                           const result = await submitBid(playerId, listingId, amount);
-                          setBiddingEndTime(new Date(Date.now() + 8000));
                           const { data: bidData } = await supabase
                             .from('bids')
                             .select('*')
