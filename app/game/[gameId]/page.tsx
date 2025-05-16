@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Leaderboard } from "@/components/leaderboard";
 import { supabase } from "@/lib/supabaseClient";
-import { getCurrentListingIndex, incrementCurrentListingIndex, updatePlayerBalance } from "@/lib/supabaseGame";
+import { getCurrentListingIndex, incrementCurrentListingIndex, updatePlayerBalance, resetBiddingEndTime } from "@/lib/supabaseGame";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -513,11 +513,10 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                         try {
                           setHasBid(true);
                           const result = await submitBid(playerId, listingId, amount);
-                          const { data: bidData } = await supabase
-                            .from('bids')
-                            .select('*')
-                            .eq('game_id', gameId)
-                            .eq('listing_id', currentListing.id);
+                          // Only the host resets the timer in the backend
+                          if (typeof window !== "undefined" && localStorage.getItem("supabaseIsHost") === "1") {
+                            await resetBiddingEndTime(gameId, 8);
+                          }
                           return result;
                         } catch (error) {
                           if (error instanceof Error) {
