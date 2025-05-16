@@ -189,6 +189,11 @@ export default function GameResultsPage() {
               .from('games')
               .update({ status: 'ended' })
               .eq('id', gameId);
+            // Reset starting_budget for all players in this game
+            await supabase
+              .from('players')
+              .update({ starting_budget: null })
+              .eq('game_id', gameId);
             router.push("/bank/dashboard");
           }}
           className="bg-black text-white px-6 py-2 rounded-lg font-semibold shadow hover:bg-gray-900 transition"

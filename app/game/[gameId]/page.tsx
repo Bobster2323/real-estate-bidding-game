@@ -12,6 +12,7 @@ import { getCurrentListingIndex, incrementCurrentListingIndex, updatePlayerBalan
 import { Progress } from "@/components/ui/progress";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function GamePage({ params }: { params: Promise<{ gameId: string }> }) {
   const { gameId } = use(params);
@@ -34,6 +35,9 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const hasAdvancedRef = useRef(false); // Prevent double advancement
   const balanceUpdatedRef = useRef(false); // Prevent double balance update
+  const [revealStep, setRevealStep] = useState<number | null>(null);
+  const [revealActive, setRevealActive] = useState(false);
+  const [lastRevealedIndex, setLastRevealedIndex] = useState<number | null>(null);
 
   // Listing and bid calculations (must be above useEffect hooks)
   const currentListing = listings.length > 0 ? listings[currentListingIndex] : null;
@@ -114,7 +118,14 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   // When timer hits zero, show result overlay, update balance, and start countdown (host only)
   useEffect(() => {
     async function handleResult() {
-      if (timer === 0 && biddingEndTime && !showResult && hasBid) {
+      if (
+        timer === 0 &&
+        biddingEndTime &&
+        !showResult &&
+        hasBid &&
+        !revealActive &&
+        currentListingIndex !== lastRevealedIndex
+      ) {
         setResultCountdown(10); // Always reset to 10 when overlay is shown
         if (mostRecentHighestBid && highestBidder && currentListing) {
           const profit = currentListing.realPrice - mostRecentHighestBid.amount;
@@ -127,7 +138,11 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
         } else {
           setResultInfo(null);
         }
-        setShowResult(true);
+        // Start animated reveal only if not already active and not already revealed for this property
+        setRevealStep(0);
+        setRevealActive(true);
+        setShowResult(false); // Hide the old modal during animation
+        setLastRevealedIndex(currentListingIndex);
         const isHost = typeof window !== "undefined" && localStorage.getItem("supabaseIsHost") === "1";
         if (isHost && mostRecentHighestBid && highestBidder && currentListing) {
           if (!balanceUpdatedRef.current) {
@@ -153,7 +168,24 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     return () => {
       if (resultTimeout) clearTimeout(resultTimeout);
     };
-  }, [timer, biddingEndTime, showResult, hasBid, mostRecentHighestBid, highestBidder, players, gameId, currentListing]);
+  }, [timer, biddingEndTime, showResult, hasBid, mostRecentHighestBid, highestBidder, players, gameId, currentListing, revealActive, currentListingIndex, lastRevealedIndex]);
+
+  // Animated reveal sequence
+  useEffect(() => {
+    if (!revealActive) return;
+    if (revealStep === null) return;
+    let timeout: NodeJS.Timeout;
+    if (revealStep < 2) {
+      timeout = setTimeout(() => setRevealStep(revealStep + 1), 2500); // 2.5s per step
+    } else if (revealStep === 2) {
+      timeout = setTimeout(() => {
+        setRevealActive(false);
+        setShowResult(true);
+        setRevealStep(null);
+      }, 2500); // Show profit/loss for 2.5s
+    }
+    return () => clearTimeout(timeout);
+  }, [revealStep, revealActive]);
 
   // Countdown for result overlay and advance property when countdown reaches 0 (host only)
   useEffect(() => {
@@ -222,6 +254,11 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     }
   }, [currentImageIndex]);
 
+  // When property changes, reset lastRevealedIndex if needed
+  useEffect(() => {
+    setLastRevealedIndex(null);
+  }, [currentListingIndex]);
+
   if (!currentListing) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center">
@@ -244,6 +281,55 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-950 flex flex-col dark">
+      {/* Animated Bid Result Overlay */}
+      <AnimatePresence>
+        {revealActive && (
+          <motion.div
+            key="reveal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-95"
+          >
+            <motion.div
+              key={revealStep}
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -30 }}
+              transition={{ duration: 0.7 }}
+              className="text-center"
+            >
+              {revealStep === 0 && mostRecentHighestBid && highestBidder && (
+                <>
+                  <div className="text-2xl md:text-3xl font-bold text-white mb-4">Bid won by {highestBidder.name}{highestBidder.investment_bank ? ` from bank ${highestBidder.investment_bank}` : ""}</div>
+                </>
+              )}
+              {revealStep === 1 && mostRecentHighestBid && (
+                <>
+                  <div className="text-lg md:text-xl text-gray-200 mb-2">Purchase Price</div>
+                  <div className="text-4xl md:text-5xl font-extrabold text-white mb-2">€{mostRecentHighestBid.amount.toLocaleString()}</div>
+                </>
+              )}
+              {revealStep === 2 && resultInfo && (
+                <>
+                  <div className="text-lg md:text-xl text-gray-200 mb-2">Listing Price</div>
+                  <div className="text-3xl md:text-4xl font-bold text-white mb-2">€{resultInfo.realPrice?.toLocaleString()}</div>
+                  <div className={
+                    resultInfo.profit > 0
+                      ? "text-2xl font-bold text-green-400 mt-6"
+                      : resultInfo.profit < 0
+                      ? "text-2xl font-bold text-red-400 mt-6"
+                      : "text-2xl font-bold text-gray-300 mt-6"
+                  }>
+                    {resultInfo.profit > 0 ? `Profit: +€${resultInfo.profit.toLocaleString()}` : resultInfo.profit < 0 ? `Loss: -€${Math.abs(resultInfo.profit).toLocaleString()}` : "No profit/loss"}
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Header */}
       <header className="w-full border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="w-full px-6 flex h-16 items-center justify-between">
@@ -340,24 +426,25 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
             {/* Right Column: Current Highest Bid above Bidding Controls */}
             <div className="w-full max-w-xs flex flex-col gap-8 flex-shrink-0">
               {/* Current Highest Bid Card */}
-              <Card className="w-full shadow-2xl rounded-3xl border-0 bg-gradient-to-br from-gray-800/90 via-gray-900/90 to-gray-800/90 backdrop-blur-xl ring-2 ring-primary/20 mx-auto min-h-[240px] max-h-[320px] flex justify-center">
-                <CardContent className="px-4 md:px-10 py-8 md:py-10 text-center flex flex-col items-center w-full h-full justify-center">
+              <Card className="w-full shadow-2xl rounded-3xl border-0 bg-gradient-to-br from-gray-800/90 via-gray-900/90 to-gray-800/90 backdrop-blur-xl ring-2 ring-primary/20 mx-auto min-h-[240px] md:min-h-[320px] flex justify-center">
+                <CardContent className="px-4 md:px-10 py-8 md:py-10 text-center flex flex-col items-center w-full h-full justify-center pb-10">
                   {timer === 0 && biddingEndTime && hasBid && showResult ? (
                     <>
                       {mostRecentHighestBid && highestBidder && resultInfo ? (
                         <>
-                          <span className="block text-2xl md:text-3xl font-bold text-green-400 mb-2 mt-4 md:mt-8 drop-shadow">Property Sold!</span>
-                          <span className="block text-lg md:text-xl text-gray-100 mb-2">{highestBidder.name} bought this property for <span className="font-bold">€{mostRecentHighestBid.amount.toLocaleString()}</span>!</span>
+                          <span className="block text-lg md:text-xl text-gray-100 mb-2">{highestBidder.name} bought this property for</span>
+                          <span className="block text-3xl md:text-4xl font-extrabold text-white mb-2">€{mostRecentHighestBid.amount.toLocaleString()}</span>
+                          <span className="block text-lg md:text-xl text-gray-400 mb-2">Listing Price: <span className="font-bold text-white">€{resultInfo.realPrice?.toLocaleString()}</span></span>
+                          <hr className="my-4 w-2/3 border-gray-700 mx-auto" />
                           <span className={
                             resultInfo.profit > 0
-                              ? "block text-lg font-bold text-green-400 mb-2"
+                              ? "block text-2xl font-bold text-green-400 mb-2"
                               : resultInfo.profit < 0
-                              ? "block text-lg font-bold text-red-400 mb-2"
-                              : "block text-lg font-bold text-gray-300 mb-2"
+                              ? "block text-2xl font-bold text-red-400 mb-2"
+                              : "block text-2xl font-bold text-gray-300 mb-2"
                           }>
                             {resultInfo.profit > 0 ? `Profit: +€${resultInfo.profit.toLocaleString()}` : resultInfo.profit < 0 ? `Loss: -€${Math.abs(resultInfo.profit).toLocaleString()}` : "No profit/loss"}
                           </span>
-                          <span className="block text-xs text-muted-foreground mb-2">Listing Price: €{resultInfo.realPrice?.toLocaleString()}</span>
                         </>
                       ) : (
                         <>
@@ -365,21 +452,19 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                           <span className="block text-lg md:text-xl text-gray-100 mb-2">No one bought this property.</span>
                         </>
                       )}
-                      <div className="w-full mt-4 md:mt-6">
-                        <span className="block text-xs text-gray-400 mb-1">Next property</span>
-                        <Progress value={Math.max(0, resultCountdown) * 100 / 10} className="h-4 md:h-5 rounded-full bg-gray-700 [&_.bg-primary]:bg-green-500/80 shadow-inner" />
-                      </div>
-                      {/* Host-only Next Property button */}
+                      {/* Host-only Next Property button (always visible, timer/progress removed) */}
                       {typeof window !== "undefined" && localStorage.getItem("supabaseIsHost") === "1" && (
-                        <Button
-                          className="mt-6"
-                          onClick={async () => {
-                            await incrementCurrentListingIndex(gameId);
-                            setShowResult(false);
-                          }}
-                        >
-                          Next Property
-                        </Button>
+                        <div className="w-full flex justify-center pt-2 pb-2">
+                          <Button
+                            className="w-full max-w-xs mx-auto"
+                            onClick={async () => {
+                              await incrementCurrentListingIndex(gameId);
+                              setShowResult(false);
+                            }}
+                          >
+                            Next Property
+                          </Button>
+                        </div>
                       )}
                     </>
                   ) : (
@@ -388,18 +473,19 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                       <span className="block text-4xl md:text-5xl font-extrabold text-primary drop-shadow-lg mb-2">
                         €{animatedBid.toLocaleString()}
                       </span>
-                      {highestBidder && (
-                        <div className="flex items-center justify-center gap-2 mt-2 text-base md:text-lg text-primary font-medium">
-                          by {highestBidder.name}
-                        </div>
-                      )}
-                      {/* Bidding Timer as Progress Bar */}
-                      {biddingEndTime && timer > 0 && (
-                        <div className="w-full mt-4 md:mt-6">
-                          <span className="block text-xs text-gray-400 mb-1">Time left to bid</span>
-                          <Progress value={timer * 100 / 8} className="h-4 md:h-5 rounded-full bg-gray-700 [&_.bg-primary]:bg-red-500/80 shadow-inner" />
-                        </div>
-                      )}
+                      {/* Always reserve space for 'by {name}' */}
+                      <div className={`flex items-center justify-center gap-2 mt-2 text-base md:text-lg text-primary font-medium min-h-[28px]`}>
+                        {highestBidder ? (
+                          <>by {highestBidder.name}</>
+                        ) : (
+                          <span className="opacity-0 select-none">by</span>
+                        )}
+                      </div>
+                      {/* Always show timer/progress bar */}
+                      <div className="w-full mt-4 md:mt-6 min-h-[40px] flex flex-col justify-end">
+                        <span className="block text-xs text-gray-400 mb-1">Time left to bid</span>
+                        <Progress value={timer > 0 ? timer * 100 / 8 : 0} className={`h-4 md:h-5 rounded-full bg-gray-700 [&_.bg-primary]:${timer > 0 ? 'bg-red-500/80' : 'bg-gray-600/60'} shadow-inner`} />
+                      </div>
                       {biddingEndTime && timer === 0 && hasBid && (
                         <div className="mt-4 text-base md:text-lg font-bold text-red-400">Sold!</div>
                       )}
@@ -409,7 +495,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
               </Card>
               {/* Bidding Controls Card */}
               {gameId && playerId && currentListing && (
-                <Card className="w-full shadow-2xl rounded-3xl border-0 bg-card/80 backdrop-blur-lg flex-shrink-0">
+                <Card className="w-full shadow-2xl rounded-3xl border-0 bg-card/80 backdrop-blur-lg flex-shrink-0 min-h-[240px] md:min-h-[320px] flex flex-col justify-center">
                   <CardContent>
                     <BiddingControls
                       gameId={gameId}
@@ -421,7 +507,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                         try {
                           setHasBid(true);
                           const result = await submitBid(playerId, listingId, amount);
-                          // Fetch updated bids from Supabase
+                          setBiddingEndTime(new Date(Date.now() + 8000));
                           const { data: bidData } = await supabase
                             .from('bids')
                             .select('*')
@@ -429,7 +515,6 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                             .eq('listing_id', currentListing.id);
                           return result;
                         } catch (error) {
-                          // Show error to user
                           if (error instanceof Error) {
                             alert(error.message);
                           } else {

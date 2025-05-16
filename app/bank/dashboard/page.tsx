@@ -9,8 +9,11 @@ export default function BankDashboard() {
   const [loading, setLoading] = useState(true);
   const [bank, setBank] = useState<any>(null);
   const [investors, setInvestors] = useState<any[]>([]);
-  const [tab, setTab] = useState<"investors" | "rankings">("investors");
+  const [tab, setTab] = useState<"investors" | "rankings" | "investorRankings">("investors");
   const [allBanks, setAllBanks] = useState<any[]>([]);
+  const [allInvestorStats, setAllInvestorStats] = useState<any[]>([]);
+  const [allPlayers, setAllPlayers] = useState<any[]>([]);
+  const [allWinningBids, setAllWinningBids] = useState<any[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -30,6 +33,7 @@ export default function BankDashboard() {
       if (!investorList || investorList.length === 0) {
         setInvestors([]);
         setAllBanks([]);
+        setAllInvestorStats([]);
         setLoading(false);
         return;
       }
@@ -99,6 +103,73 @@ export default function BankDashboard() {
       // Get all banks for rankings
       const { data: banksList } = await supabase.from("investment_bank").select("*");
       setAllBanks(banksList || []);
+
+      // --- Fetch all investors for global ranking ---
+      // 1. Get all players
+      const { data: allPlayers } = await supabase.from("players").select("*");
+      setAllPlayers(allPlayers || []);
+      const allPlayerIds = allPlayers ? allPlayers.map((p: any) => p.id) : [];
+      let allWinningBids: any[] = [];
+      if (allPlayerIds.length === 1) {
+        const { data } = await supabase
+          .from('bids')
+          .select('id, player_id, amount, won, listing_id')
+          .eq('won', true)
+          .eq('player_id', allPlayerIds[0]);
+        allWinningBids = data || [];
+      } else if (allPlayerIds.length > 1) {
+        const { data } = await supabase
+          .from('bids')
+          .select('id, player_id, amount, won, listing_id')
+          .eq('won', true)
+          .in('player_id', allPlayerIds);
+        allWinningBids = data || [];
+      } else {
+        allWinningBids = [];
+      }
+      // 2. Fetch all relevant listings
+      const allListingIds = Array.from(new Set((allWinningBids || []).map((bid: any) => bid.listing_id)));
+      let allListingPriceMap: Record<string, number> = {};
+      if (allListingIds.length > 0) {
+        const { data: listingsData } = await supabase
+          .from('listings')
+          .select('id, real_price')
+          .in('id', allListingIds);
+        for (const l of listingsData || []) {
+          allListingPriceMap[l.id] = l.real_price;
+        }
+      }
+      // 3. Attach real_price to each bid
+      allWinningBids = (allWinningBids || []).map((bid: any) => ({
+        ...bid,
+        real_price: allListingPriceMap[bid.listing_id] || 0
+      }));
+      setAllWinningBids(allWinningBids);
+      // 4. Aggregate stats per investor
+      const allInvestorStatsMap: Record<string, any> = {};
+      for (const p of allPlayers || []) {
+        allInvestorStatsMap[p.id] = {
+          ...p,
+          invested_amount: 0,
+          returned_amount: 0,
+          net_profit: 0,
+          roi: 0,
+          deals: 0,
+        };
+      }
+      for (const bid of (allWinningBids || []) as any[]) {
+        const inv = allInvestorStatsMap[bid.player_id];
+        if (inv) {
+          inv.invested_amount += bid.amount || 0;
+          inv.returned_amount += bid.real_price || 0;
+          inv.deals += 1;
+        }
+      }
+      for (const inv of Object.values(allInvestorStatsMap)) {
+        (inv as any).net_profit = (inv as any).returned_amount - (inv as any).invested_amount;
+        (inv as any).roi = (inv as any).invested_amount > 0 ? (((inv as any).returned_amount - (inv as any).invested_amount) / (inv as any).invested_amount * 100).toFixed(1) : '0.0';
+      }
+      setAllInvestorStats(Object.values(allInvestorStatsMap));
       setLoading(false);
     }
     fetchData();
@@ -109,6 +180,18 @@ export default function BankDashboard() {
 
   const totalCapital = bank.balance || 0;
   const roi = 8.7; // Placeholder, replace with real data if available
+
+  // Calculate bank ranking by balance
+  const sortedBanks = [...allBanks].sort((a, b) => (b.balance || 0) - (a.balance || 0));
+  const bankRank = sortedBanks.findIndex(b => b.id === bank.id) + 1;
+  const totalBanks = allBanks.length;
+
+  // Find best performing investor in this bank
+  let bestInvestor = null;
+  if (investors.length > 0) {
+    bestInvestor = [...investors].sort((a, b) => parseFloat(b.roi) - parseFloat(a.roi))[0];
+    if (parseFloat(bestInvestor.roi) === 0) bestInvestor = null;
+  }
 
   async function handleGoToAuction() {
     // 1. Check for a waiting game
@@ -150,90 +233,229 @@ export default function BankDashboard() {
     router.push(`/lobby/${gameId}`);
   }
 
+  // --- Aggregate bank stats for rankings ---
+  const bankStats = (allBanks || []).map((bank: any) => {
+    // Get all players in this bank
+    const bankPlayers = (allPlayers || []).filter((p: any) => p.investment_bank_id === bank.id);
+    const playerIds = bankPlayers.map((p: any) => p.id);
+    // Get all winning bids for these players
+    const bankBids = (allWinningBids || []).filter((bid: any) => playerIds.includes(bid.player_id));
+    const totalInvested = bankBids.reduce((sum: number, bid: any) => sum + (bid.amount || 0), 0);
+    const totalReturned = bankBids.reduce((sum: number, bid: any) => sum + (bid.real_price || 0), 0);
+    const netProfit = totalReturned - totalInvested;
+    const roi = totalInvested > 0 ? ((netProfit / totalInvested) * 100).toFixed(1) : '0.0';
+    const deals = bankBids.length;
+    return {
+      ...bank,
+      totalInvestors: bankPlayers.length,
+      totalInvested,
+      totalReturned,
+      netProfit,
+      roi,
+      deals,
+    };
+  });
+
+  // Calculate the actual ROI for the current bank
+  const thisBankStats = bankStats.find(b => b.id === bank.id);
+  const actualROI = thisBankStats && thisBankStats.totalInvested > 0 ? ((thisBankStats.netProfit / thisBankStats.totalInvested) * 100).toFixed(1) : '0.0';
+
   return (
     <RequireAuth>
-      <div className="max-w-5xl mx-auto p-8">
-        <div className="flex justify-between items-center mb-6">
+      <div className="min-h-screen bg-[#18181b]">
+        <div className="max-w-6xl mx-auto p-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold">{bank.name}</h1>
-            <div className="text-muted-foreground">Investment Bank Dashboard</div>
+              <h1 className="text-4xl font-extrabold tracking-tight mb-1 text-white drop-shadow-lg">{bank.name}</h1>
+              <div className="text-lg text-gray-400 mb-2">Investment Bank Dashboard</div>
+            </div>
+            <button
+              className="px-7 py-3 rounded-xl font-bold text-white shadow-lg bg-gradient-to-r from-green-400 via-green-500 to-green-600 hover:from-green-500 hover:to-green-700 transition text-lg"
+              onClick={handleGoToAuction}
+            >
+              Go to Auction
+            </button>
           </div>
-          <button
-            className="px-6 py-2 rounded-lg font-semibold text-white shadow bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-600 hover:from-yellow-500 hover:to-yellow-700 transition"
-            onClick={handleGoToAuction}
-          >
-            Go to Auction
-          </button>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+            <div className="bg-[#23272f] rounded-2xl p-7 shadow-xl flex flex-col gap-2 border border-[#23272f]">
+              <div className="text-gray-400 text-base font-medium">Total Capital</div>
+              <div className="text-3xl font-bold text-white">€{totalCapital.toLocaleString()}</div>
+              <div className="text-green-400 text-base font-semibold flex items-center gap-1">↗ {actualROI}% ROI</div>
+          </div>
+            <div className="bg-[#23272f] rounded-2xl p-7 shadow-xl flex flex-col gap-2 border border-[#23272f]">
+              <div className="text-gray-400 text-base font-medium">Bank Ranking</div>
+              <div className="text-3xl font-bold text-white">#{bankRank} <span className='text-lg font-normal text-gray-400'>of {totalBanks}</span></div>
+              <div className="text-sm text-gray-400">Ranked by balance</div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          <div className="bg-card rounded-xl p-6 shadow flex flex-col gap-2">
-            <div className="text-muted-foreground text-sm">Total Capital</div>
-            <div className="text-2xl font-bold">€{totalCapital.toLocaleString()}</div>
-            <div className="text-green-600 text-sm font-semibold flex items-center gap-1">↗ {roi}% ROI</div>
+            <div className="bg-[#23272f] rounded-2xl p-7 shadow-xl flex flex-col gap-2 border border-[#23272f]">
+              <div className="text-gray-400 text-base font-medium">Total Investors</div>
+              <div className="text-3xl font-bold text-white">{investors.length}</div>
+              <div className="text-sm text-gray-400">6 active, 2 pending</div>
           </div>
-          <div className="bg-card rounded-xl p-6 shadow flex flex-col gap-2">
-            <div className="text-muted-foreground text-sm">Total Investors</div>
-            <div className="text-2xl font-bold">{investors.length}</div>
+            <div className="bg-[#23272f] rounded-2xl p-7 shadow-xl flex flex-col gap-2 border border-[#23272f]">
+              <div className="text-gray-400 text-base font-medium">Best Investor</div>
+              {bestInvestor ? (
+                <>
+                  <div className="text-2xl font-bold text-white">{bestInvestor.name}</div>
+                  <div className="text-green-400 text-base font-semibold">ROI: {bestInvestor.roi}%</div>
+                </>
+              ) : (
+                <div className="text-lg text-gray-400">No data yet</div>
+              )}
           </div>
-        </div>
-        <div className="flex gap-4 mb-6">
-          <Button variant={tab === "investors" ? "default" : "outline"} onClick={() => setTab("investors")}>Investors</Button>
-          <Button variant={tab === "rankings" ? "default" : "outline"} onClick={() => setTab("rankings")}>Bank Rankings</Button>
+          </div>
+          <div className="flex gap-4 mb-8">
+            <Button
+              variant="ghost"
+              className={`rounded-full px-6 py-2 text-lg font-bold transition-all duration-150
+                ${tab === "investors" ? "bg-green-600 text-white shadow-lg" : "bg-transparent text-gray-300 border border-gray-600"}`}
+              onClick={() => setTab("investors")}
+            >
+              Investors
+            </Button>
+            <Button
+              variant="ghost"
+              className={`rounded-full px-6 py-2 text-lg font-bold transition-all duration-150
+                ${tab === "rankings" ? "bg-green-600 text-white shadow-lg" : "bg-transparent text-gray-300 border border-gray-600"}`}
+              onClick={() => setTab("rankings")}
+            >
+              Bank Rankings
+            </Button>
+            <Button
+              variant="ghost"
+              className={`rounded-full px-6 py-2 text-lg font-bold transition-all duration-150
+                ${tab === "investorRankings" ? "bg-green-600 text-white shadow-lg" : "bg-transparent text-gray-300 border border-gray-600"}`}
+              onClick={() => setTab("investorRankings")}
+            >
+              Investor Rankings
+            </Button>
         </div>
         {tab === "investors" && (
-          <div className="bg-card rounded-xl p-6 shadow mb-6">
-            <h2 className="text-xl font-bold mb-4">Investors</h2>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left">
-                <thead>
-                  <tr className="border-b">
-                    <th className="py-2 px-4 font-semibold">Investor</th>
-                    <th className="py-2 px-4 font-semibold">Invested Amount</th>
-                    <th className="py-2 px-4 font-semibold">Returned Amount</th>
-                    <th className="py-2 px-4 font-semibold">Net Profit</th>
-                    <th className="py-2 px-4 font-semibold">ROI</th>
-                    <th className="py-2 px-4 font-semibold">Deals</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {investors.map((inv) => (
-                    <tr key={inv.id} className="border-b last:border-b-0">
-                      <td className="py-2 px-4 font-medium">{inv.name}</td>
-                      <td className="py-2 px-4">€{(inv.invested_amount || 0).toLocaleString()}</td>
-                      <td className="py-2 px-4">€{(inv.returned_amount || 0).toLocaleString()}</td>
-                      <td className="py-2 px-4">€{(inv.net_profit || 0).toLocaleString()}</td>
-                      <td className="py-2 px-4 text-green-600">{inv.roi}%</td>
-                      <td className="py-2 px-4">{inv.deals || 0}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <div className="bg-[#23272f] rounded-2xl p-8 shadow-xl mb-8 border border-[#23272f]">
+              <h2 className="text-2xl font-bold mb-6 text-white">Investors</h2>
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-gray-400">Manage your bank's investors and their performance</div>
+                <div className="flex gap-2">
+                  <input className="rounded-lg px-4 py-2 bg-[#18181b] text-white placeholder:text-gray-400 border border-[#23272f] focus:outline-none focus:ring-2 focus:ring-yellow-400" placeholder="Search investors..." />
+                  <button className="rounded-lg px-3 py-2 bg-[#18181b] text-white border border-[#23272f] hover:bg-[#23272f] transition"><svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
           </div>
-        )}
-        {tab === "rankings" && (
-          <div className="bg-card rounded-xl p-6 shadow mb-6">
-            <h2 className="text-xl font-bold mb-4">Bank Rankings</h2>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left">
-                <thead>
-                  <tr className="border-b">
-                    <th className="py-2 px-4 font-semibold">Bank</th>
-                    <th className="py-2 px-4 font-semibold">Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allBanks.sort((a, b) => (b.balance || 0) - (a.balance || 0)).map((b) => (
-                    <tr key={b.id} className="border-b last:border-b-0">
-                      <td className="py-2 px-4 font-medium">{b.name}</td>
-                      <td className="py-2 px-4">€{(b.balance || 0).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
-        )}
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left rounded-xl overflow-hidden border-collapse border border-gray-700">
+                  <thead>
+                    <tr className="border-b border-[#23272f] bg-[#23272f]/80">
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Investor</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Invested Amount</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Returned Amount</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Net Profit</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">ROI</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Deals</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {investors.map((inv, idx) => {
+                      const rowBg = idx % 2 === 0 ? 'bg-[#23272f]/70' : '';
+                      const isLast = idx === investors.length - 1;
+                      return (
+                        <tr key={inv.id} className={`${rowBg} ${!isLast ? 'border-b border-gray-600' : ''} hover:bg-[#23272f]/60 transition`}>
+                          <td className="py-3 px-5 font-medium text-white border-r border-gray-700">{inv.name}</td>
+                          <td className="py-3 px-5 text-white border-r border-gray-700">€{(inv.invested_amount || 0).toLocaleString()}</td>
+                          <td className="py-3 px-5 text-white border-r border-gray-700">€{(inv.returned_amount || 0).toLocaleString()}</td>
+                          <td className="py-3 px-5 text-white border-r border-gray-700">€{(inv.net_profit || 0).toLocaleString()}</td>
+                          <td className="py-3 px-5 font-semibold border-r border-gray-700" style={{ color: parseFloat(inv.roi) >= 0 ? '#4ade80' : '#f87171' }}>{inv.roi}%</td>
+                          <td className="py-3 px-5 text-white border-r border-gray-700">{inv.deals || 0}</td>
+                          <td className="py-3 px-5"><span className="inline-block rounded-full bg-green-500/20 text-green-400 px-3 py-1 text-xs font-bold">Active</span></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {tab === "rankings" && (
+            <div className="bg-[#23272f] rounded-2xl p-8 shadow-xl mb-8 border border-[#23272f]">
+              <h2 className="text-2xl font-bold mb-6 text-white">Bank Rankings</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left rounded-xl overflow-hidden border-collapse border border-gray-700">
+                  <thead>
+                    <tr className="border-b border-[#23272f] bg-[#23272f]/80">
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Bank</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Balance</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Total Investors</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Total Invested</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Total Returned</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Net Profit</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">ROI</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Deals</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bankStats
+                      .sort((a, b) => parseFloat(b.roi) - parseFloat(a.roi))
+                      .map((b, idx) => {
+                        const rowBg = idx % 2 === 0 ? 'bg-[#23272f]/70' : '';
+                        const isLast = idx === bankStats.length - 1;
+                        return (
+                          <tr key={b.id} className={`${rowBg} ${!isLast ? 'border-b border-gray-600' : ''} hover:bg-[#23272f]/60 transition`}>
+                            <td className="py-3 px-5 font-medium text-white border-r border-gray-700">{b.name}</td>
+                            <td className="py-3 px-5 text-white border-r border-gray-700">€{(b.balance || 0).toLocaleString()}</td>
+                            <td className="py-3 px-5 text-white border-r border-gray-700">{b.totalInvestors}</td>
+                            <td className="py-3 px-5 text-white border-r border-gray-700">€{(b.totalInvested || 0).toLocaleString()}</td>
+                            <td className="py-3 px-5 text-white border-r border-gray-700">€{(b.totalReturned || 0).toLocaleString()}</td>
+                            <td className="py-3 px-5 text-white border-r border-gray-700">€{(b.netProfit || 0).toLocaleString()}</td>
+                            <td className="py-3 px-5 font-semibold border-r border-gray-700" style={{ color: parseFloat(b.roi) >= 0 ? '#4ade80' : '#f87171' }}>{b.roi}%</td>
+                            <td className="py-3 px-5 text-white border-r border-gray-700">{b.deals}</td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+                </div>
+          )}
+          {tab === "investorRankings" && (
+            <div className="bg-[#23272f] rounded-2xl p-8 shadow-xl mb-8 border border-[#23272f]">
+              <h2 className="text-2xl font-bold mb-6 text-white">Investor Rankings (All Time)</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left rounded-xl overflow-hidden border-collapse border border-gray-700">
+                  <thead>
+                    <tr className="border-b border-[#23272f] bg-[#23272f]/80">
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Investor</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Bank</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Invested Amount</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Returned Amount</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Net Profit</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">ROI</th>
+                      <th className="py-3 px-5 font-semibold text-white/90 border-r border-b border-gray-700">Deals</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allInvestorStats
+                      .sort((a, b) => parseFloat(b.roi) - parseFloat(a.roi))
+                      .map((inv, idx) => {
+                        const bankName = allBanks.find(b => b.id === inv.investment_bank_id)?.name || "-";
+                        const rowBg = idx % 2 === 0 ? 'bg-[#23272f]/70' : '';
+                        const isLast = idx === allInvestorStats.length - 1;
+                        return (
+                          <tr key={inv.id} className={`${rowBg} ${!isLast ? 'border-b border-gray-600' : ''} hover:bg-[#23272f]/60 transition`}>
+                            <td className="py-3 px-5 font-medium text-white border-r border-gray-700">{inv.name}</td>
+                            <td className="py-3 px-5 text-white border-r border-gray-700">{bankName}</td>
+                            <td className="py-3 px-5 text-white border-r border-gray-700">€{(inv.invested_amount || 0).toLocaleString()}</td>
+                            <td className="py-3 px-5 text-white border-r border-gray-700">€{(inv.returned_amount || 0).toLocaleString()}</td>
+                            <td className="py-3 px-5 text-white border-r border-gray-700">€{(inv.net_profit || 0).toLocaleString()}</td>
+                            <td className="py-3 px-5 font-semibold border-r border-gray-700" style={{ color: parseFloat(inv.roi) >= 0 ? '#4ade80' : '#f87171' }}>{inv.roi}%</td>
+                            <td className="py-3 px-5 text-white border-r border-gray-700">{inv.deals || 0}</td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          </div>
       </div>
     </RequireAuth>
   );

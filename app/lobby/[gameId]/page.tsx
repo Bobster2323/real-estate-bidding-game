@@ -24,6 +24,7 @@ export default function LobbyPage({ params }: { params: Promise<{ gameId: string
   const [copied, setCopied] = useState(false);
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
   const [playerBudgets, setPlayerBudgets] = useState<Record<string, number>>({});
+  const [allBanks, setAllBanks] = useState<any[]>([]);
 
   // Only skip host form if player=1 is in the URL (joiners)
   const isJoiningPlayer = searchParams.get("player") === "1";
@@ -116,7 +117,7 @@ export default function LobbyPage({ params }: { params: Promise<{ gameId: string
   // Handle Ready Up: save budget to DB, then set ready, then deduct from bank
   const handleReadyUp = async (playerId: string) => {
     const budget = playerBudgets[playerId] ?? 1000000;
-    await supabase.from("players").update({ balance: budget }).eq("id", playerId);
+    await supabase.from("players").update({ balance: budget, starting_budget: budget }).eq("id", playerId);
     // Only deduct if not already ready
     const { data: player } = await supabase.from("players").select("*").eq("id", playerId).single();
     if (player && !player.ready && player.investment_bank_id) {
@@ -130,65 +131,123 @@ export default function LobbyPage({ params }: { params: Promise<{ gameId: string
     await setPlayerReady(playerId, true);
   };
 
+  // Fetch all banks on mount
+  useEffect(() => {
+    async function fetchBanks() {
+      const { data } = await supabase.from("investment_bank").select("*");
+      setAllBanks(data || []);
+    }
+    fetchBanks();
+  }, []);
+
   return (
     <RequireAuth>
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-8">
-        <div className="w-full max-w-lg bg-card rounded-lg shadow-lg p-8 space-y-8">
-          <h1 className="text-3xl font-bold text-center">Game Lobby</h1>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#18181b] p-8">
+        <div className="w-full max-w-4xl bg-[#23272f] rounded-2xl shadow-2xl p-10 space-y-8 border border-[#23272f]">
+          <h1 className="text-3xl font-extrabold text-white text-center mb-2">Game Lobby</h1>
           {(!isJoiningPlayer && !hostAdded) ? (
             <div className="space-y-4">
               <Input
                 placeholder="Enter your name (host)"
                 value={hostName}
                 onChange={e => setHostName(e.target.value)}
+                className="bg-[#18181b] text-white border border-gray-700 placeholder:text-gray-400 rounded-lg"
               />
-              {error && <p className="text-destructive text-sm">{error}</p>}
-              <Button className="w-full" onClick={handleAddHost}>
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+              <Button className="w-full bg-gradient-to-r from-green-400 via-green-500 to-green-600 hover:from-green-500 hover:to-green-700 text-white font-bold rounded-lg shadow-lg" onClick={handleAddHost}>
                 Join as Host
               </Button>
             </div>
           ) : null}
           <div className="space-y-2">
-            <h2 className="text-xl font-semibold">Players in Lobby</h2>
-            <ul className="bg-muted rounded-lg p-4 min-h-[40px] flex flex-col gap-2">
-              {players.length === 0 && <li className="text-muted-foreground">No players yet</li>}
-              {players.map(player => (
-                <li key={player.id} className="py-2 px-4 bg-white rounded shadow flex items-center gap-3 border border-gray-200">
-                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600">
-                    {player.name.slice(0,2).toUpperCase()}
-                  </div>
-                  <span className="text-lg font-medium">{player.name}</span>
-                  {player.ready && <span className="ml-2 text-green-600 font-bold">Ready</span>}
-                  {player.id === currentPlayerId && !player.ready && (
-                    <Button size="sm" className="ml-2" onClick={() => handleReadyUp(player.id)}>Ready Up</Button>
+            <h2 className="text-xl font-bold text-white">Players in Lobby</h2>
+            <div className="bg-[#23272f] rounded-xl p-4 border border-gray-700 overflow-x-auto">
+              <table className="min-w-full text-left border-collapse">
+                <thead>
+                  <tr>
+                    <th className="py-2 px-4 text-gray-400 font-semibold">Player</th>
+                    <th className="py-2 px-4 text-gray-400 font-semibold">Bank</th>
+                    <th className="py-2 px-4 text-gray-400 font-semibold">Status</th>
+                    <th className="py-2 px-4 text-gray-400 font-semibold">Budget (€)</th>
+                    <th className="py-2 px-4 text-gray-400 font-semibold">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {players.length === 0 && (
+                    <tr><td colSpan={5} className="text-gray-400 py-4 text-center">No players yet</td></tr>
                   )}
-                  {/* Individual player budget input */}
-                  <div className="ml-auto flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">Budget (€)</span>
-                    <Input
-                      type="number"
-                      min={1000}
-                      step={1000}
-                      value={playerBudgets[player.id] ?? 1000000}
-                      onChange={e => handleBudgetChange(player.id, Number(e.target.value))}
-                      disabled={player.id !== currentPlayerId || player.ready}
-                      className="w-24"
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  {players.map(player => {
+                    const bank = allBanks.find(b => b.id === player.investment_bank_id);
+                    const bankName = bank?.name || "-";
+                    const bankBalance = bank?.balance ?? 0;
+                    const maxBudget = bankBalance;
+                    return (
+                      <tr key={player.id} className="border-b border-gray-700">
+                        <td className="py-2 px-4 flex items-center gap-2">
+                          <span className="text-lg font-semibold text-white">{player.name}</span>
+                        </td>
+                        <td className="py-2 px-4 text-white">
+                          {bankName} <span className="text-xs text-gray-400">(€{bankBalance.toLocaleString()})</span>
+                        </td>
+                        <td className="py-2 px-4">
+                          {player.ready ? <span className="inline-block rounded-full bg-green-500/20 text-green-400 px-3 py-1 text-xs font-bold">Ready</span> : <span className="inline-block rounded-full bg-gray-700 text-gray-300 px-3 py-1 text-xs font-bold">Not Ready</span>}
+                        </td>
+                        <td className="py-2 px-4">
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            pattern="[0-9]*[.,]?[0-9]*"
+                            value={
+                              (playerBudgets[player.id] ?? 1000000).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+                            }
+                            onChange={e => {
+                              let val = e.target.value.replace(/,/g, '');
+                              let num = val === '' ? 0 : parseFloat(val);
+                              if (num > maxBudget) num = maxBudget;
+                              handleBudgetChange(player.id, num);
+                            }}
+                            disabled={player.id !== currentPlayerId || player.ready}
+                            className="w-32 bg-[#23272f] text-white border border-gray-700 rounded-lg text-right appearance-none"
+                          />
+                        </td>
+                        <td className="py-2 px-4">
+                          {player.id === currentPlayerId && !player.ready && (
+                            <Button size="sm" className="bg-gradient-to-r from-green-400 via-green-500 to-green-600 hover:from-green-500 hover:to-green-700 text-white font-bold rounded shadow" onClick={() => handleReadyUp(player.id)}>Ready Up</Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
           <div className="space-y-2">
-            <label className="block font-medium">Number of Rounds</label>
-            <Input
-              type="number"
-              min={1}
-              value={rounds}
-              onChange={e => setRounds(Number(e.target.value))}
-              disabled={!isHost || players.some(p => p.ready)}
-            />
-            {!isHost && <div className="text-xs text-muted-foreground">Only the host can change the number of rounds.</div>}
+            <label className="block font-semibold text-white">Number of Rounds</label>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="icon"
+                className="bg-[#23272f] text-white border border-gray-700 rounded-lg px-3 py-1 disabled:opacity-50"
+                onClick={() => setRounds(r => Math.max(1, r - 1))}
+                disabled={!isHost || players.some(p => p.ready) || rounds <= 1}
+              >
+                -
+              </Button>
+              <span className="w-12 text-center text-lg font-semibold text-white bg-[#23272f] border border-gray-700 rounded-lg py-1">
+                {rounds}
+              </span>
+              <Button
+                type="button"
+                size="icon"
+                className="bg-[#23272f] text-white border border-gray-700 rounded-lg px-3 py-1 disabled:opacity-50"
+                onClick={() => setRounds(r => r + 1)}
+                disabled={!isHost || players.some(p => p.ready)}
+              >
+                +
+              </Button>
+            </div>
+            {!isHost && <div className="text-xs text-gray-400">Only the host can change the number of rounds.</div>}
           </div>
         </div>
       </div>

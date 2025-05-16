@@ -26,52 +26,44 @@ export function Leaderboard({ players: propPlayers, startingBalance: propStartin
   }
 
   return (
-    <div className="bg-card rounded-xl p-4 shadow-lg border border-border/50">
-      <div className="mb-6">
-        <h2 className="text-xl font-bold">Leaderboard</h2>
-        <p className="text-xs text-muted-foreground">Starting balance: €{Math.floor(startingBalance).toLocaleString()}</p>
+    <div className="bg-card rounded-lg p-3 shadow-lg border border-border/50">
+      <div className="mb-4">
+        <h2 className="text-lg font-bold">Leaderboard</h2>
       </div>
-
-      <div className="space-y-4">
+      <div className="space-y-2">
         {sortedPlayers.map((player, index) => {
-          const profit = (player.balance || 0) - startingBalance;
-          const profitPercentage = ((profit / startingBalance) * 100).toFixed(1);
-          // const creditScore = getCreditScore(player.id);
-          // const { rating, color } = getCreditRating(creditScore);
-          // const interestRate = getInterestRate(player.id);
-
+          const baseline = typeof player.starting_budget === 'number' && !isNaN(player.starting_budget) ? player.starting_budget : startingBalance;
+          const profit = (player.balance || 0) - baseline;
+          const profitPercentage = ((profit / baseline) * 100).toFixed(1);
           return (
             <div
               key={player.id}
-              className="relative bg-muted/30 rounded-xl transition-all overflow-hidden border border-border/50 shadow-sm hover:shadow-md"
+              className="relative bg-muted/30 rounded-lg transition-all overflow-hidden border border-border/40 shadow-sm hover:shadow-md flex items-center px-3 py-2 gap-3"
             >
               {/* Rank indicator bar */}
               <div 
                 className={`absolute left-0 top-0 bottom-0 w-1 ${index === 0 ? "bg-yellow-500" : index === 1 ? "bg-zinc-400" : "bg-bronze-500"}`}
               />
-
-              {/* Main player info */}
-              <div className="p-4 flex items-center gap-4">
-                {/* Rank number */}
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium border ${
-                  index === 0 ? "bg-yellow-500/10 border-yellow-500/50 text-yellow-500" :
-                  index === 1 ? "bg-zinc-500/10 border-zinc-500/50 text-zinc-500" :
-                  "bg-bronze-500/10 border-bronze-500/50 text-bronze-500"
-                }`}>
-                  {index + 1}
+              {/* Rank number */}
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center font-medium text-xs border ${
+                index === 0 ? "bg-yellow-500/10 border-yellow-500/50 text-yellow-500" :
+                index === 1 ? "bg-zinc-500/10 border-zinc-500/50 text-zinc-500" :
+                "bg-bronze-500/10 border-bronze-500/50 text-bronze-500"
+              }`}>
+                {index + 1}
+              </div>
+              {/* Player info condensed */}
+              <div className="flex-grow flex flex-col justify-center min-w-0">
+                <div className="flex items-baseline gap-2 min-w-0">
+                  <span className="font-semibold text-base truncate max-w-[90px]">{player.name}</span>
+                  <span className="text-xs text-muted-foreground truncate max-w-[60px]">({player.investment_bank || "—"})</span>
                 </div>
-
-                {/* Player name and balance */}
-                <div className="flex-grow">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-lg">{player.name}</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground mb-1">Bank: —</div>
-                  <div className="text-xl font-bold">€{Math.floor(player.balance || 0).toLocaleString()}</div>
-                  <div className={`text-sm font-medium mt-1 ${profit >= 0 ? "text-green-500" : "text-red-500"} flex items-center gap-1`}>
-                    {profit >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                <div className="flex items-end gap-2 mt-0.5">
+                  <span className="text-lg font-bold">€{Math.floor(player.balance || 0).toLocaleString()}</span>
+                  <span className={`text-xs font-medium ${profit >= 0 ? "text-green-500" : "text-red-500"} flex items-center gap-1`}>
+                    {profit >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                     {profit >= 0 ? "+" : ""}€{Math.floor(Math.abs(profit)).toLocaleString()}
-                  </div>
+                  </span>
                 </div>
               </div>
             </div>
