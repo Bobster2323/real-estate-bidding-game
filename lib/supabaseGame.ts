@@ -29,12 +29,14 @@ export async function joinGame(gameId: string, playerName: string) {
 
 // Place a bid for a player and reset the bidding timer
 export async function placeBid(gameId: string, playerId: string, listingId: string, amount: number) {
+  // Place the bid (no balance deduction here)
   const { data, error } = await supabase
     .from('bids')
     .insert({ game_id: gameId, player_id: playerId, listing_id: listingId, amount })
     .select()
     .single();
   if (error) throw error;
+
   // Fetch current bidding_end_time
   const { data: game } = await supabase
     .from('games')

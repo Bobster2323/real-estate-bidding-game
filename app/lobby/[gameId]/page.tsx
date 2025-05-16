@@ -113,10 +113,20 @@ export default function LobbyPage({ params }: { params: Promise<{ gameId: string
     setPlayerBudgets(prev => ({ ...prev, [playerId]: value }));
   };
 
-  // Handle Ready Up: save budget to DB, then set ready
+  // Handle Ready Up: save budget to DB, then set ready, then deduct from bank
   const handleReadyUp = async (playerId: string) => {
     const budget = playerBudgets[playerId] ?? 1000000;
     await supabase.from("players").update({ balance: budget }).eq("id", playerId);
+    // Only deduct if not already ready
+    const { data: player } = await supabase.from("players").select("*").eq("id", playerId).single();
+    if (player && !player.ready && player.investment_bank_id) {
+      // Deduct from bank
+      const { data: bank } = await supabase.from("investment_bank").select("*").eq("id", player.investment_bank_id).single();
+      if (bank) {
+        const newBankBalance = (bank.balance || 0) - budget;
+        await supabase.from("investment_bank").update({ balance: newBankBalance }).eq("id", bank.id);
+      }
+    }
     await setPlayerReady(playerId, true);
   };
 

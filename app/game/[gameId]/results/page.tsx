@@ -41,6 +41,25 @@ export default function GameResultsPage() {
     fetchData();
   }, [gameId]);
 
+  useEffect(() => {
+    async function refundBalances() {
+      for (const player of players) {
+        if (player.investment_bank_id && typeof player.balance === 'number') {
+          // Check if already refunded (optional: add a refunded flag to player row if needed)
+          // For now, always refund on results page load
+          const { data: bank } = await supabase.from('investment_bank').select('*').eq('id', player.investment_bank_id).single();
+          if (bank) {
+            const newBankBalance = (bank.balance || 0) + player.balance;
+            await supabase.from('investment_bank').update({ balance: newBankBalance }).eq('id', bank.id);
+          }
+        }
+      }
+    }
+    if (players.length > 0) {
+      refundBalances();
+    }
+  }, [players]);
+
   // --- Helper calculations ---
   // Only show content when not loading and data is available
   if (loading) {
@@ -159,7 +178,17 @@ export default function GameResultsPage() {
 
       {/* Return to Dashboard Button */}
       <div className="flex justify-end">
-        <Button onClick={() => router.push("/bank/dashboard")} className="bg-black text-white px-6 py-2 rounded-lg font-semibold shadow hover:bg-gray-900 transition">
+        <Button
+          onClick={async () => {
+            // Mark the game as ended, which will trigger the player reset
+            await supabase
+              .from('games')
+              .update({ status: 'ended' })
+              .eq('id', gameId);
+            router.push("/bank/dashboard");
+          }}
+          className="bg-black text-white px-6 py-2 rounded-lg font-semibold shadow hover:bg-gray-900 transition"
+        >
           Return to Dashboard
         </Button>
       </div>

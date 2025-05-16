@@ -33,6 +33,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   const thumbnailContainerRef = useRef<HTMLDivElement>(null);
   const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const hasAdvancedRef = useRef(false); // Prevent double advancement
+  const balanceUpdatedRef = useRef(false); // Prevent double balance update
 
   // Listing and bid calculations (must be above useEffect hooks)
   const currentListing = listings.length > 0 ? listings[currentListingIndex] : null;
@@ -64,7 +65,8 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
         .from('listings')
         .select('*')
         .in('id', game.listing_ids);
-      if (listingsError) return;
+      // GUARD: Only update state if listingsData is valid and not empty
+      if (listingsError || !listingsData || listingsData.length === 0) return;
       setListings((listingsData || []).map(listing => ({
         ...listing,
         realPrice: listing.real_price
@@ -127,12 +129,15 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
       setShowResult(true);
       const isHost = typeof window !== "undefined" && localStorage.getItem("supabaseIsHost") === "1";
       if (isHost && mostRecentHighestBid && highestBidder && currentListing) {
-        // Update winner's balance: add profit/loss
-        const winner = players.find(p => p.id === mostRecentHighestBid.player_id);
-        if (winner) {
-          const profit = currentListing.realPrice - mostRecentHighestBid.amount;
-          const newBalance = winner.balance + profit;
-          updatePlayerBalance(winner.id, newBalance);
+        if (!balanceUpdatedRef.current) {
+          // Update winner's balance: add profit/loss
+          const winner = players.find(p => p.id === mostRecentHighestBid.player_id);
+          if (winner) {
+            const profit = currentListing.realPrice - mostRecentHighestBid.amount;
+            const newBalance = winner.balance + profit;
+            updatePlayerBalance(winner.id, newBalance);
+          }
+          balanceUpdatedRef.current = true;
         }
       }
     }
@@ -180,6 +185,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     setBiddingEndTime(null);
     setHasBid(false);
     setTimer(8); // Set to 8 seconds for new property
+    balanceUpdatedRef.current = false; // Reset for next property
   }, [currentListingIndex]);
 
   useEffect(() => {
@@ -399,15 +405,25 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                       bids={bids}
                       getPlayerBid={getPlayerBid}
                       submitBid={async (playerId, listingId, amount) => {
-                        setHasBid(true);
-                        const result = await submitBid(playerId, listingId, amount);
-                        // Fetch updated bids from Supabase
-                        const { data: bidData } = await supabase
-                          .from('bids')
-                          .select('*')
-                          .eq('game_id', gameId)
-                          .eq('listing_id', currentListing.id);
-                        return result;
+                        try {
+                          setHasBid(true);
+                          const result = await submitBid(playerId, listingId, amount);
+                          // Fetch updated bids from Supabase
+                          const { data: bidData } = await supabase
+                            .from('bids')
+                            .select('*')
+                            .eq('game_id', gameId)
+                            .eq('listing_id', currentListing.id);
+                          return result;
+                        } catch (error) {
+                          // Show error to user
+                          if (error instanceof Error) {
+                            alert(error.message);
+                          } else {
+                            alert('Failed to place bid. Please try again.');
+                          }
+                          return null;
+                        }
                       }}
                       disabled={biddingEndTime !== null && timer === 0}
                     />
