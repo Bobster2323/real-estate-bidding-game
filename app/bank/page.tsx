@@ -59,8 +59,12 @@ function CreateBankForm() {
     setLoading(true);
     setError("");
     setSuccess(false);
+    let bankName = name.trim();
+    if (!bankName.endsWith(" Oy")) {
+      bankName += " Oy";
+    }
     const { data, error } = await supabase.from("investment_bank").insert({
-      name,
+      name: bankName,
       logo,
       focus,
       balance: 10000000,

@@ -55,8 +55,8 @@ export function Leaderboard({ players: propPlayers, startingBalance: propStartin
               {/* Player info condensed */}
               <div className="flex-grow flex flex-col justify-center min-w-0">
                 <div className="flex items-baseline gap-2 min-w-0">
-                  <span className="font-semibold text-base truncate max-w-[90px]">{player.name}</span>
-                  <span className="text-xs text-muted-foreground truncate max-w-[60px]">({player.investment_bank || "—"})</span>
+                  <span className="font-semibold text-base">{player.name}</span>
+                  <span className="text-xs text-muted-foreground">({player.investment_bank || "—"})</span>
                 </div>
                 <div className="flex items-end gap-2 mt-0.5">
                   <span className="text-lg font-bold">€{Math.floor(player.balance || 0).toLocaleString()}</span>
