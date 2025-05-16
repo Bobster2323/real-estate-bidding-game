@@ -63,6 +63,7 @@ function CreateBankForm() {
       name,
       logo,
       focus,
+      balance: 10000000,
     }).select().single();
     setLoading(false);
     if (error) {
@@ -115,7 +116,7 @@ function CreateBankForm() {
       </div>
       <div className="flex items-center justify-between">
         <span className="text-muted-foreground">Starting Capital</span>
-        <span className="font-bold text-lg">€50,000,000</span>
+        <span className="font-bold text-lg">€10,000,000</span>
       </div>
       <Button type="submit" className="w-full" disabled={loading}>{loading ? "Establishing..." : "Establish Bank"}</Button>
       {success && <div className="text-green-600 text-center">Bank created successfully!</div>}
