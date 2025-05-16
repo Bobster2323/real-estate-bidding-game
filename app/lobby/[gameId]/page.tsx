@@ -23,6 +23,7 @@ export default function LobbyPage({ params }: { params: Promise<{ gameId: string
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
+  const [playerBudgets, setPlayerBudgets] = useState<Record<string, number>>({});
 
   // Only skip host form if player=1 is in the URL (joiners)
   const isJoiningPlayer = searchParams.get("player") === "1";
@@ -104,6 +105,21 @@ export default function LobbyPage({ params }: { params: Promise<{ gameId: string
     router.push(`/game/${gameId}`);
   };
 
+  // Helper: is this player the host?
+  const isHost = players.length > 0 && players[0].id === currentPlayerId;
+
+  // Handle budget change for a player
+  const handleBudgetChange = (playerId: string, value: number) => {
+    setPlayerBudgets(prev => ({ ...prev, [playerId]: value }));
+  };
+
+  // Handle Ready Up: save budget to DB, then set ready
+  const handleReadyUp = async (playerId: string) => {
+    const budget = playerBudgets[playerId] ?? 1000000;
+    await supabase.from("players").update({ balance: budget }).eq("id", playerId);
+    await setPlayerReady(playerId, true);
+  };
+
   return (
     <RequireAuth>
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-8">
@@ -134,20 +150,24 @@ export default function LobbyPage({ params }: { params: Promise<{ gameId: string
                   <span className="text-lg font-medium">{player.name}</span>
                   {player.ready && <span className="ml-2 text-green-600 font-bold">Ready</span>}
                   {player.id === currentPlayerId && !player.ready && (
-                    <Button size="sm" className="ml-2" onClick={() => setPlayerReady(player.id, true)}>Ready Up</Button>
+                    <Button size="sm" className="ml-2" onClick={() => handleReadyUp(player.id)}>Ready Up</Button>
                   )}
+                  {/* Individual player budget input */}
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Budget (€)</span>
+                    <Input
+                      type="number"
+                      min={1000}
+                      step={1000}
+                      value={playerBudgets[player.id] ?? 1000000}
+                      onChange={e => handleBudgetChange(player.id, Number(e.target.value))}
+                      disabled={player.id !== currentPlayerId || player.ready}
+                      className="w-24"
+                    />
+                  </div>
                 </li>
               ))}
             </ul>
-          </div>
-          <div className="space-y-2">
-            <label className="block font-medium">Invite Link</label>
-            <div className="flex gap-2">
-              <Input value={inviteUrl} readOnly className="flex-1" />
-              <Button onClick={handleCopyLink} className="w-32">
-                {copied ? "Copied!" : "Copy Link"}
-              </Button>
-            </div>
           </div>
           <div className="space-y-2">
             <label className="block font-medium">Number of Rounds</label>
@@ -156,19 +176,9 @@ export default function LobbyPage({ params }: { params: Promise<{ gameId: string
               min={1}
               value={rounds}
               onChange={e => setRounds(Number(e.target.value))}
-              disabled={players.some(p => p.ready)}
+              disabled={!isHost || players.some(p => p.ready)}
             />
-          </div>
-          <div className="space-y-2">
-            <label className="block font-medium">Starting Budget (€)</label>
-            <Input
-              type="number"
-              min={1000}
-              step={1000}
-              value={budget}
-              onChange={e => setBudget(Number(e.target.value))}
-              disabled={players.some(p => p.ready)}
-            />
+            {!isHost && <div className="text-xs text-muted-foreground">Only the host can change the number of rounds.</div>}
           </div>
         </div>
       </div>

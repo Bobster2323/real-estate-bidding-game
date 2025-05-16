@@ -24,7 +24,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   const [biddingEndTime, setBiddingEndTime] = useState<Date | null>(null);
   const [timer, setTimer] = useState<number>(0);
   const [showResult, setShowResult] = useState(false);
-  const [resultInfo, setResultInfo] = useState<{ winner: string, amount: number } | null>(null);
+  const [resultInfo, setResultInfo] = useState<{ winner: string, amount: number, profit: number, realPrice: number } | null>(null);
   const [resultTimeout, setResultTimeout] = useState<NodeJS.Timeout | null>(null);
   const [resultCountdown, setResultCountdown] = useState(10);
   const [hasBid, setHasBid] = useState(false);
@@ -32,11 +32,14 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   const prevBidRef = useRef(0);
   const thumbnailContainerRef = useRef<HTMLDivElement>(null);
   const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const hasAdvancedRef = useRef(false); // Prevent double advancement
 
   // Listing and bid calculations (must be above useEffect hooks)
   const currentListing = listings.length > 0 ? listings[currentListingIndex] : null;
   const currentListingIdStr = String(currentListing?.id);
-  const currentBids = bids.filter(bid => String(bid.listing_id) === currentListingIdStr);
+  const currentBids = bids.filter(
+    bid => String(bid.listing_id) === currentListingIdStr && String(bid.game_id) === String(gameId)
+  );
   const highestBid = currentBids.length > 0 ? Math.max(...currentBids.map(b => b.amount)) : 0;
   const sortedBids = [...currentBids].sort((a, b) => {
     if (b.amount !== a.amount) return b.amount - a.amount;
@@ -48,9 +51,9 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   // Get current playerId from localStorage
   const playerId = typeof window !== "undefined" ? localStorage.getItem("supabasePlayerId") : null;
 
-  // Fetch only the listings for this game, and subscribe to bidding_end_time
+  // Fetch game state (current_listing_index, bidding_end_time) and listings from backend every second
   useEffect(() => {
-    async function fetchGameListings() {
+    async function fetchGameState() {
       const { data: game, error: gameError } = await supabase
         .from('games')
         .select('listing_ids, current_listing_index, bidding_end_time')
@@ -62,15 +65,33 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
         .select('*')
         .in('id', game.listing_ids);
       if (listingsError) return;
-      setListings(listingsData || []);
+      setListings((listingsData || []).map(listing => ({
+        ...listing,
+        realPrice: listing.real_price
+      })));
       setCurrentListingIndex(game.current_listing_index ?? 0);
       setBiddingEndTime(game.bidding_end_time ? new Date(game.bidding_end_time) : null);
     }
-    fetchGameListings();
-    // Poll for current_listing_index and bidding_end_time every 1 second
-    const interval = setInterval(fetchGameListings, 1000);
+    fetchGameState();
+    const interval = setInterval(fetchGameState, 1000);
     return () => clearInterval(interval);
   }, [gameId]);
+
+  // Fetch latest bids for the current property from backend every second
+  useEffect(() => {
+    async function fetchBids() {
+      if (!listings[currentListingIndex]) return;
+      const listingId = listings[currentListingIndex].id;
+      const { data: bidData, error } = await supabase
+        .from('bids')
+        .select('*')
+        .eq('game_id', gameId)
+        .eq('listing_id', listingId);
+    }
+    fetchBids();
+    const interval = setInterval(fetchBids, 1000);
+    return () => clearInterval(interval);
+  }, [gameId, listings, currentListingIndex]);
 
   // Timer countdown logic
   useEffect(() => {
@@ -92,18 +113,26 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   useEffect(() => {
     if (timer === 0 && biddingEndTime && !showResult && hasBid) {
       setResultCountdown(10); // Always reset to 10 when overlay is shown
-      if (mostRecentHighestBid && highestBidder) {
-        setResultInfo({ winner: highestBidder.name, amount: mostRecentHighestBid.amount });
+      if (mostRecentHighestBid && highestBidder && currentListing) {
+        const profit = currentListing.realPrice - mostRecentHighestBid.amount;
+        setResultInfo({
+          winner: highestBidder.name,
+          amount: mostRecentHighestBid.amount,
+          profit,
+          realPrice: currentListing.realPrice
+        });
       } else {
         setResultInfo(null);
       }
       setShowResult(true);
       const isHost = typeof window !== "undefined" && localStorage.getItem("supabaseIsHost") === "1";
-      if (isHost && mostRecentHighestBid && highestBidder) {
-        // Update winner's balance
+      if (isHost && mostRecentHighestBid && highestBidder && currentListing) {
+        // Update winner's balance: add profit/loss
         const winner = players.find(p => p.id === mostRecentHighestBid.player_id);
         if (winner) {
-          updatePlayerBalance(winner.id, winner.balance - mostRecentHighestBid.amount);
+          const profit = currentListing.realPrice - mostRecentHighestBid.amount;
+          const newBalance = winner.balance + profit;
+          updatePlayerBalance(winner.id, newBalance);
         }
       }
     }
@@ -111,30 +140,38 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     return () => {
       if (resultTimeout) clearTimeout(resultTimeout);
     };
-  }, [timer, biddingEndTime, showResult, hasBid, mostRecentHighestBid, highestBidder, players, gameId]);
+  }, [timer, biddingEndTime, showResult, hasBid, mostRecentHighestBid, highestBidder, players, gameId, currentListing]);
 
   // Countdown for result overlay and advance property when countdown reaches 0 (host only)
   useEffect(() => {
     if (showResult && resultCountdown > 0) {
+      hasAdvancedRef.current = false; // Reset guard for new round
       const interval = setInterval(() => {
         setResultCountdown((prev) => prev - 0.05); // decrease smoothly
       }, 50);
       return () => clearInterval(interval);
-    } else if (showResult && resultCountdown <= 0) {
+    } else if (showResult && resultCountdown <= 0 && !hasAdvancedRef.current) {
       const isHost = typeof window !== "undefined" && localStorage.getItem("supabaseIsHost") === "1";
       if (isHost) {
         incrementCurrentListingIndex(gameId);
       }
+      hasAdvancedRef.current = true;
       setShowResult(false);
     }
   }, [showResult, resultCountdown, gameId]);
 
+  // Log current listing index only when it changes
+  useEffect(() => {
+    console.log('[Debug] currentListingIndex changed:', currentListingIndex, 'listings.length:', listings.length);
+  }, [currentListingIndex, listings.length]);
+
   // Show final score when we've played all listings
   useEffect(() => {
     if (listings.length > 0 && currentListingIndex >= listings.length) {
-      setShowFinalScore(true);
+      // Redirect to results page
+      router.push(`/game/${gameId}/results`);
     }
-  }, [currentListingIndex, listings.length]);
+  }, [currentListingIndex, listings.length, gameId, router]);
 
   // Hide result overlay and reset countdown and hasBid when property changes
   useEffect(() => {
@@ -300,10 +337,20 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                 <CardContent className="px-4 md:px-10 py-8 md:py-10 text-center flex flex-col items-center w-full h-full justify-center">
                   {timer === 0 && biddingEndTime && hasBid && showResult ? (
                     <>
-                      {mostRecentHighestBid && highestBidder ? (
+                      {mostRecentHighestBid && highestBidder && resultInfo ? (
                         <>
                           <span className="block text-2xl md:text-3xl font-bold text-green-400 mb-2 mt-4 md:mt-8 drop-shadow">Property Sold!</span>
                           <span className="block text-lg md:text-xl text-gray-100 mb-2">{highestBidder.name} bought this property for <span className="font-bold">€{mostRecentHighestBid.amount.toLocaleString()}</span>!</span>
+                          <span className={
+                            resultInfo.profit > 0
+                              ? "block text-lg font-bold text-green-400 mb-2"
+                              : resultInfo.profit < 0
+                              ? "block text-lg font-bold text-red-400 mb-2"
+                              : "block text-lg font-bold text-gray-300 mb-2"
+                          }>
+                            {resultInfo.profit > 0 ? `Profit: +€${resultInfo.profit.toLocaleString()}` : resultInfo.profit < 0 ? `Loss: -€${Math.abs(resultInfo.profit).toLocaleString()}` : "No profit/loss"}
+                          </span>
+                          <span className="block text-xs text-muted-foreground mb-2">Listing Price: €{resultInfo.realPrice?.toLocaleString()}</span>
                         </>
                       ) : (
                         <>
@@ -351,18 +398,15 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                       listingId={currentListing.id}
                       bids={bids}
                       getPlayerBid={getPlayerBid}
-                      submitBid={async (...args) => {
+                      submitBid={async (playerId, listingId, amount) => {
                         setHasBid(true);
-                        const result = await submitBid(...args);
-                        // Fetch updated bidding_end_time from Supabase
-                        const { data: game } = await supabase
-                          .from('games')
-                          .select('bidding_end_time')
-                          .eq('id', gameId)
-                          .single();
-                        if (game?.bidding_end_time) {
-                          setBiddingEndTime(new Date(game.bidding_end_time));
-                        }
+                        const result = await submitBid(playerId, listingId, amount);
+                        // Fetch updated bids from Supabase
+                        const { data: bidData } = await supabase
+                          .from('bids')
+                          .select('*')
+                          .eq('game_id', gameId)
+                          .eq('listing_id', currentListing.id);
                         return result;
                       }}
                       disabled={biddingEndTime !== null && timer === 0}

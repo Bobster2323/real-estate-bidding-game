@@ -35,12 +35,26 @@ export async function placeBid(gameId: string, playerId: string, listingId: stri
     .select()
     .single();
   if (error) throw error;
-  // Set bidding_end_time to now + 8 seconds
-  const endTime = new Date(Date.now() + 8000).toISOString();
-  await supabase
+  // Fetch current bidding_end_time
+  const { data: game } = await supabase
     .from('games')
-    .update({ bidding_end_time: endTime })
-    .eq('id', gameId);
+    .select('bidding_end_time')
+    .eq('id', gameId)
+    .single();
+  const now = Date.now();
+  const newEndTime = new Date(now + 8000).toISOString();
+  let shouldUpdate = true;
+  if (game?.bidding_end_time) {
+    const currentEnd = new Date(game.bidding_end_time).getTime();
+    // Only update if the new end time is later than the current one
+    shouldUpdate = now + 8000 > currentEnd;
+  }
+  if (shouldUpdate) {
+    await supabase
+      .from('games')
+      .update({ bidding_end_time: newEndTime })
+      .eq('id', gameId);
+  }
   return data;
 }
 
