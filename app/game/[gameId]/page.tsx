@@ -75,7 +75,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
         ...listing,
         realPrice: listing.real_price
       })));
-      setCurrentListingIndex(game.current_listing_index ?? 0);
+      // Only update bidding end time, not the listing index
       setBiddingEndTime(game.bidding_end_time ? new Date(game.bidding_end_time) : null);
     }
     fetchGameState();
@@ -459,6 +459,9 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                             className="w-full max-w-xs mx-auto"
                             onClick={async () => {
                               await incrementCurrentListingIndex(gameId);
+                              // Update the local state after incrementing the backend
+                              const newIndex = await getCurrentListingIndex(gameId);
+                              setCurrentListingIndex(newIndex);
                               setShowResult(false);
                             }}
                           >
