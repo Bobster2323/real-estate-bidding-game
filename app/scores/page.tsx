@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+export const dynamic = "force-dynamic";
+
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,29 +30,32 @@ type Round = {
 }
 
 export default function ScoresPage() {
-  const [players, setPlayers] = useState<Player[]>(() => {
-    const savedPlayers = localStorage.getItem("realEstatePlayers")
-    return savedPlayers ? JSON.parse(savedPlayers) : []
-  })
-
-  const [rounds, setRounds] = useState<Round[]>(() => {
-    const savedRounds = localStorage.getItem("realEstateRounds")
-    return savedRounds ? JSON.parse(savedRounds) : []
-  })
-
-  const [newPlayerName, setNewPlayerName] = useState("")
-
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [rounds, setRounds] = useState<Round[]>([]);
+  const [newPlayerName, setNewPlayerName] = useState("");
   const [newRound, setNewRound] = useState({
     propertyName: "",
     realPrice: "",
     playerBids: {} as Record<string, string>,
-  })
+  });
+  const [mounted, setMounted] = useState(false);
 
-  // Save to localStorage when state changes
-  const saveToLocalStorage = (newPlayers: Player[], newRounds: Round[]) => {
-    localStorage.setItem("realEstatePlayers", JSON.stringify(newPlayers))
-    localStorage.setItem("realEstateRounds", JSON.stringify(newRounds))
-  }
+  useEffect(() => {
+    setMounted(true);
+    if (typeof window !== "undefined") {
+      const savedPlayers = localStorage.getItem("realEstatePlayers");
+      const savedRounds = localStorage.getItem("realEstateRounds");
+      setPlayers(savedPlayers ? JSON.parse(savedPlayers) : []);
+      setRounds(savedRounds ? JSON.parse(savedRounds) : []);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("realEstatePlayers", JSON.stringify(players));
+      localStorage.setItem("realEstateRounds", JSON.stringify(rounds));
+    }
+  }, [players, rounds]);
 
   const addPlayer = () => {
     if (newPlayerName.trim()) {
@@ -62,7 +67,6 @@ export default function ScoresPage() {
       }
       const updatedPlayers = [...players, newPlayer]
       setPlayers(updatedPlayers)
-      saveToLocalStorage(updatedPlayers, rounds)
       setNewPlayerName("")
     }
   }
@@ -70,7 +74,6 @@ export default function ScoresPage() {
   const removePlayer = (id: string) => {
     const updatedPlayers = players.filter((player) => player.id !== id)
     setPlayers(updatedPlayers)
-    saveToLocalStorage(updatedPlayers, rounds)
   }
 
   const addRound = () => {
@@ -112,7 +115,6 @@ export default function ScoresPage() {
       const updatedRounds = [...rounds, round]
       setRounds(updatedRounds)
       setPlayers(updatedPlayers)
-      saveToLocalStorage(updatedPlayers, updatedRounds)
 
       // Reset form
       setNewRound({
@@ -141,8 +143,9 @@ export default function ScoresPage() {
     }))
     setPlayers(resetPlayers)
     setRounds([])
-    saveToLocalStorage(resetPlayers, [])
   }
+
+  if (!mounted) return null;
 
   return (
     <div className="container mx-auto p-4 md:p-8">
