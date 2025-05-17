@@ -27,36 +27,14 @@ export async function joinGame(gameId: string, playerName: string) {
   return data;
 }
 
-// Place a bid for a player and reset the bidding timer
+// Place a bid for a player (let the DB trigger handle bidding_end_time)
 export async function placeBid(gameId: string, playerId: string, listingId: string, amount: number) {
-  // Place the bid (no balance deduction here)
   const { data, error } = await supabase
     .from('bids')
     .insert({ game_id: gameId, player_id: playerId, listing_id: listingId, amount })
     .select()
     .single();
   if (error) throw error;
-
-  // Fetch current bidding_end_time
-  const { data: game } = await supabase
-    .from('games')
-    .select('bidding_end_time')
-    .eq('id', gameId)
-    .single();
-  const now = Date.now();
-  const newEndTime = new Date(now + 8000).toISOString();
-  let shouldUpdate = true;
-  if (game?.bidding_end_time) {
-    const currentEnd = new Date(game.bidding_end_time).getTime();
-    // Only update if the new end time is later than the current one
-    shouldUpdate = now + 8000 > currentEnd;
-  }
-  if (shouldUpdate) {
-    await supabase
-      .from('games')
-      .update({ bidding_end_time: newEndTime })
-      .eq('id', gameId);
-  }
   return data;
 }
 

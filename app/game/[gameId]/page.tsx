@@ -39,6 +39,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   const [revealActive, setRevealActive] = useState(false);
   const [lastRevealedIndex, setLastRevealedIndex] = useState<number | null>(null);
   const [biddingDisabled, setBiddingDisabled] = useState(false);
+  const [timerWasRunning, setTimerWasRunning] = useState(false);
 
   // Listing and bid calculations (must be above useEffect hooks)
   const currentListing = listings.length > 0 ? listings[currentListingIndex] : null;
@@ -56,6 +57,13 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
 
   // Get current playerId from localStorage
   const playerId = typeof window !== "undefined" ? localStorage.getItem("supabasePlayerId") : null;
+
+  // Add a function to fetch server time using Supabase RPC
+  async function fetchServerTime() {
+    const { data, error } = await supabase.rpc('get_server_time');
+    if (error || !data) return Date.now();
+    return new Date(data).getTime();
+  }
 
   // Fetch game state (current_listing_index, bidding_end_time) and listings from backend every second
   useEffect(() => {
@@ -84,50 +92,55 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     return () => clearInterval(interval);
   }, [gameId]);
 
-  // Fetch latest bids for the current property from backend every second
+  // Add a useEffect to listen for new bids and reset the timer locally
   useEffect(() => {
-    async function fetchBids() {
-      if (!listings[currentListingIndex]) return;
-      const listingId = listings[currentListingIndex].id;
-      const { data: bidData, error } = await supabase
-        .from('bids')
-        .select('*')
-        .eq('game_id', gameId)
-        .eq('listing_id', listingId);
-    }
-    fetchBids();
-    const interval = setInterval(fetchBids, 1000);
-    return () => clearInterval(interval);
-  }, [gameId, listings, currentListingIndex]);
-
-  // Timer countdown logic
-  useEffect(() => {
-    if (!biddingEndTime) {
+    if (!currentListing) return;
+    // Find the latest bid for the current property
+    const currentBids = bids.filter(
+      bid => String(bid.listing_id) === String(currentListing.id) && String(bid.game_id) === String(gameId)
+    );
+    if (currentBids.length === 0) {
       setTimer(0);
       return;
     }
-    const updateTimer = () => {
-      const now = Date.now();
-      const diff = Math.max(0, (biddingEndTime.getTime() - now) / 1000); // use float seconds
-      setTimer(diff);
-    };
-    updateTimer();
-    const interval = setInterval(updateTimer, 50); // update every 50ms for smoothness
-    return () => clearInterval(interval);
-  }, [biddingEndTime, currentListingIndex]);
+    // Get the most recent bid
+    const latestBid = currentBids.reduce((a, b) => new Date(a.created_at) > new Date(b.created_at) ? a : b);
+    // Reset timer to 8 seconds on every new bid
+    setTimer(8);
+    // Optionally, you can store the latestBid.id in a ref to avoid resetting timer on every render
+  }, [bids, currentListingIndex]);
 
-  // When timer hits zero, show result overlay, update balance, and start countdown (host only)
+  // Local countdown timer
+  useEffect(() => {
+    if (timer <= 0) return;
+    const interval = setInterval(() => {
+      setTimer((prev) => Math.max(0, prev - 0.05));
+    }, 50);
+    return () => clearInterval(interval);
+  }, [timer]);
+
+  // Track if timer was ever running for the current property
+  useEffect(() => {
+    if (timer > 0) setTimerWasRunning(true);
+  }, [timer]);
+
+  // Reset timerWasRunning on property change
+  useEffect(() => {
+    setTimerWasRunning(false);
+  }, [currentListingIndex]);
+
+  // When timer hits zero, show result overlay only if timer was running
   useEffect(() => {
     async function handleResult() {
       if (
         timer === 0 &&
-        biddingEndTime &&
+        timerWasRunning &&
         !showResult &&
         hasBid &&
         !revealActive &&
         currentListingIndex !== lastRevealedIndex
       ) {
-        setResultCountdown(10); // Always reset to 10 when overlay is shown
+        setResultCountdown(10);
         if (mostRecentHighestBid && highestBidder && currentListing) {
           const profit = currentListing.realPrice - mostRecentHighestBid.amount;
           setResultInfo({
@@ -139,20 +152,17 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
         } else {
           setResultInfo(null);
         }
-        // Start animated reveal only if not already active and not already revealed for this property
         setRevealStep(0);
         setRevealActive(true);
-        setShowResult(false); // Hide the old modal during animation
+        setShowResult(false);
         setLastRevealedIndex(currentListingIndex);
         const isHost = typeof window !== "undefined" && localStorage.getItem("supabaseIsHost") === "1";
         if (isHost && mostRecentHighestBid && highestBidder && currentListing) {
           if (!balanceUpdatedRef.current) {
-            // Mark the winning bid as won (AWAIT THIS!)
             await supabase
               .from('bids')
               .update({ won: true })
               .eq('id', mostRecentHighestBid.id);
-            // Update winner's balance: add profit/loss
             const winner = players.find(p => p.id === mostRecentHighestBid.player_id);
             if (winner) {
               const profit = currentListing.realPrice - mostRecentHighestBid.amount;
@@ -165,11 +175,10 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
       }
     }
     handleResult();
-    // Cleanup timeout on unmount or round change
     return () => {
       if (resultTimeout) clearTimeout(resultTimeout);
     };
-  }, [timer, biddingEndTime, showResult, hasBid, mostRecentHighestBid, highestBidder, players, gameId, currentListing, revealActive, currentListingIndex, lastRevealedIndex]);
+  }, [timer, timerWasRunning, showResult, hasBid, mostRecentHighestBid, highestBidder, players, gameId, currentListing, revealActive, currentListingIndex, lastRevealedIndex]);
 
   // Animated reveal sequence
   useEffect(() => {
@@ -212,15 +221,35 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     }
   }, [currentListingIndex, listings.length, gameId, router]);
 
-  // Hide result overlay and reset countdown and hasBid when property changes
+  // On property change, reset local state and wait for server update
   useEffect(() => {
     setShowResult(false);
     setResultCountdown(10);
-    setBiddingEndTime(null);
+    setBiddingEndTime(null); // Wait for server to update after first bid
     setHasBid(false);
-    // Timer will be set when first bid is placed
-    balanceUpdatedRef.current = false; // Reset for next property
+    balanceUpdatedRef.current = false;
   }, [currentListingIndex]);
+
+  // Subscribe to bidding_end_time changes on the games table
+  useEffect(() => {
+    if (!gameId) return;
+    const channel = supabase
+      .channel('games-bidding-end-time')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${gameId}` },
+        (payload) => {
+          const newEndTime = payload.new?.bidding_end_time;
+          if (newEndTime) {
+            setBiddingEndTime(new Date(newEndTime));
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [gameId]);
 
   useEffect(() => {
     if (highestBid !== prevBidRef.current) {
@@ -515,15 +544,6 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                         try {
                           setHasBid(true);
                           const result = await submitBid(playerId, listingId, amount);
-                          // Fetch updated bidding_end_time from Supabase after bid
-                          const { data: game } = await supabase
-                            .from('games')
-                            .select('bidding_end_time')
-                            .eq('id', gameId)
-                            .single();
-                          if (game?.bidding_end_time) {
-                            setBiddingEndTime(new Date(game.bidding_end_time));
-                          }
                           return result;
                         } catch (error) {
                           if (error instanceof Error) {
